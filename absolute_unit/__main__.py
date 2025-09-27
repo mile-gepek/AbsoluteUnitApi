@@ -1,5 +1,6 @@
 import logging
 import os
+import traceback
 
 import disnake
 from disnake.ext import commands
@@ -72,12 +73,16 @@ async def convert(
     _ = await interaction.send(output)
 
 
-# disnake has incorrect type hints for slash command error callbacks
-@convert.error  # pyright: ignore[reportArgumentType, reportUntypedFunctionDecorator]
-async def convert_error(
+@bot.event
+async def on_slash_command_error(
     interaction: disnake.ApplicationCommandInteraction[commands.InteractionBot],
     error: commands.CommandInvokeError,
 ):
+    logging.error(
+        f"Error when attempting command '{interaction.application_command.name}': \"{error}\""
+    )
+    traceback.print_exception(error)
+
     original = error.original
     original_type = type(original)
     original_message = str(original)
