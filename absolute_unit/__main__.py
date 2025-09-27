@@ -47,7 +47,6 @@ async def convert(
     verbose:
         Print the intepretation of the parsed expression. Use this if output is unexpected.
     """
-    # raise ValueError("a")
     converted_result = try_convert_expression(input, target)
     if isinstance(converted_result, Err):
         return await interaction.send(converted_result.err_value, ephemeral=True)
