@@ -90,14 +90,12 @@ def convert_expression(
             return target_result
         target_unit = target_result.ok_value
     else:
-        unit_dict = {}
         try:
-            quantity = ureg(target)
+            unit_quantity = ureg(target)
         except pint.errors.UndefinedUnitError as e:
             units = ", ".join(e.unit_names)
             return Err(ConversionError(f"Undefined target unit(s): {units}."))
-        for unit, power in quantity.unit_items():
-            unit_dict[unit] = power
+        unit_dict = dict(unit_quantity.unit_items())
         target_unit = UnitsContainer(unit_dict)
     try:
         converted: PlainQuantity[float] = quantity.to(target_unit).to_reduced_units()  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
