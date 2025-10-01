@@ -83,12 +83,12 @@ async def on_slash_command_error(
     traceback.print_exception(error)
 
     original = error.original
-    original_type = type(original)
+    original_type_name = type(original).__name__
     original_message = str(original)
     if original_message:
-        msg = f"Error when attempting command:\n`{original_type}: {original_message}`\nThis is a bug."
+        msg = f"Error when attempting command:\n`{original_type_name}: {original_message}`\nThis is a bug."
     else:
-        msg = f"Error when attempting command:\n`{original_type}`\nThis is a bug."
+        msg = f"Error when attempting command:\n`{original_type_name}`\nThis is a bug."
     await interaction.send(msg, ephemeral=True)
 
 
