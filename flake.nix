@@ -20,7 +20,6 @@
         ]))
         ruff
         basedpyright
-        mypy
       ];
     };
   };
