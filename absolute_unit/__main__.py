@@ -4,15 +4,14 @@ import traceback
 
 import disnake
 from disnake.ext import commands
-from dotenv import load_dotenv
 from result import Err
 
+from absolute_unit.config import Config
 from absolute_unit.conversion import try_convert_expression
 from absolute_unit import ureg
 
 
-_ = load_dotenv()
-
+config = Config.get_config().unwrap()
 
 logger = logging.getLogger("disnake")
 logger.setLevel(logging.DEBUG)
@@ -22,8 +21,9 @@ handler.setFormatter(
 )
 logger.addHandler(handler)
 
+
 bot = commands.InteractionBot(
-    test_guilds=[1417274294773223468],
+    test_guilds=config.test_guilds,
 )
 
 
