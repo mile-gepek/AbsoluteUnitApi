@@ -12,6 +12,10 @@ from absolute_unit import ureg
 
 
 config = Config.get_config().unwrap()
+if config.test_guilds is None:
+    logging.info("No test guilds specified, commands will be synced globally.")
+else:
+    logging.info("Testing mode on, all errors will not be ephemeral.")
 
 logger = logging.getLogger("disnake")
 logger.setLevel(logging.DEBUG)
@@ -49,7 +53,9 @@ async def convert(
     """
     converted_result = try_convert_expression(input, target)
     if isinstance(converted_result, Err):
-        return await interaction.send(converted_result.err_value, ephemeral=True)
+        return await interaction.send(
+            converted_result.err_value, ephemeral=config.ephemeral_errors
+        )
     (expression, converted) = converted_result.ok_value
 
     # TODO: move allodis to a bigh "post-process" function
@@ -89,7 +95,7 @@ async def on_slash_command_error(
         msg = f"Error when attempting command:\n`{original_type_name}: {original_message}`\nThis is a bug."
     else:
         msg = f"Error when attempting command:\n`{original_type_name}`\nThis is a bug."
-    await interaction.send(msg, ephemeral=True)
+    await interaction.send(msg, ephemeral=config.ephemeral_errors)
 
 
 @bot.event
