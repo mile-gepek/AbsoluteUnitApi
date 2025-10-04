@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from result import Err
 
 from absolute_unit.conversion import try_convert_expression
-from absolute_unit.parsing import ureg
+from absolute_unit import ureg
 
 
 _ = load_dotenv()
