@@ -4,7 +4,8 @@ from absolute_unit.conversion import try_convert_expression
 
 if __name__ == "__main__":
     while inp := input().rstrip():
-        result = try_convert_expression(inp)
+        target = input() or None
+        result = try_convert_expression(inp, target)
         if isinstance(result, Err):
             print(result.err())
         else:
