@@ -1,3 +1,7 @@
+"""
+Configuration module, check the `Config` class for configuration options.
+"""
+
 import os
 from typing import Self
 
@@ -10,12 +14,25 @@ _ = load_dotenv()
 class ConfigError(Exception): ...
 
 
-class MissingBotTokenError(ConfigError):
-    def __init__(self, *args: object) -> None:
-        super().__init__("Missing DISCORD_APPLICATION_TOKEN key in config")
+class MissingConfigKeyError(ConfigError):
+    def __init__(self, key_name: str) -> None:
+        super().__init__(f"Missing {key_name} key in config")
 
 
 class Config:
+    """
+    Singleton class for all config, use the `get_config` method to get a config.
+
+    Options
+    -------
+    - DISCORD_APPLICATION_TOKEN `str`
+        - The token for the discord bot.
+
+    - TEST_GUILD_ID: `Optional[int]`
+        - ID of the guild used for testing.
+        - If  the ID is present, only cooldown messages will be ephemeral, all other errors will not.
+    """
+
     __config: Self | None = None
 
     def __init__(self, bot_token: str, test_guilds: list[int] | None) -> None:
@@ -28,6 +45,7 @@ class Config:
 
     @classmethod
     def get_config(cls) -> Result[Self, ConfigError]:
+        """Gets the existing config or loads it."""
         if cls.__config is not None:
             return Ok(cls.__config)
 
@@ -40,9 +58,10 @@ class Config:
 
     @staticmethod
     def load_config() -> Result[tuple[str, list[int] | None], ConfigError]:
+        """Load all the options from the file."""
         bot_token = os.getenv("DISCORD_APPLICATION_TOKEN")
         if bot_token is None:
-            return Err(MissingBotTokenError())
+            return Err(MissingConfigKeyError("DISCORD_APPLICATION_TOKEN"))
 
         test_guilds = os.getenv("TEST_GUILD_ID")
         if test_guilds is not None:
