@@ -31,6 +31,7 @@ bot = commands.InteractionBot(
 )
 
 
+@commands.cooldown(1, 5, commands.BucketType.channel)
 @bot.slash_command()
 async def convert(
     interaction: disnake.GuildCommandInteraction[commands.InteractionBot],
@@ -82,7 +83,15 @@ async def convert(
 async def on_slash_command_error(
     interaction: disnake.ApplicationCommandInteraction[commands.InteractionBot],
     error: commands.CommandInvokeError,
-):
+) -> None:
+    # For some reason on_slash_command_error gets triggered on cooldowns even though CommandOnCooldown is not a subclass of CommandInvokeError
+    if isinstance(error, commands.CommandOnCooldown):
+        await interaction.send(
+            f"Command on cooldown, please wait {error.retry_after:.2f} seconds.",
+            ephemeral=True,
+        )
+        return
+
     logging.error(
         f"Error when attempting command '{interaction.application_command.name}': \"{error}\""
     )
