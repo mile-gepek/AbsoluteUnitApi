@@ -28,6 +28,10 @@ class Config:
     - DISCORD_APPLICATION_TOKEN `str`
         - The token for the discord bot.
 
+    - CURRENCYAPI_TOKEN `Optional[str]`
+        - The token for the currencyapi.
+        - If not present currency conversion will be disabled.
+
     - TEST_GUILD_ID: `Optional[int]`
         - ID of the guild used for testing.
         - If  the ID is present, only cooldown messages will be ephemeral, all other errors will not.
@@ -35,8 +39,14 @@ class Config:
 
     __config: Self | None = None
 
-    def __init__(self, bot_token: str, test_guilds: list[int] | None) -> None:
+    def __init__(
+        self,
+        bot_token: str,
+        currencyapi_token: str | None,
+        test_guilds: list[int] | None,
+    ) -> None:
         self.bot_token: str = bot_token
+        self.currencyapi_token: str | None = currencyapi_token
         self.test_guilds: list[int] | None = test_guilds
 
     @property
@@ -57,14 +67,17 @@ class Config:
         return Ok(new)
 
     @staticmethod
-    def load_config() -> Result[tuple[str, list[int] | None], ConfigError]:
+    def load_config() -> Result[tuple[str, str | None, list[int] | None], ConfigError]:
+        # TODO: it's annoying to add arguments and typing to init and this signature, find better way.
         """Load all the options from the file."""
         bot_token = os.getenv("DISCORD_APPLICATION_TOKEN")
         if bot_token is None:
             return Err(MissingConfigKeyError("DISCORD_APPLICATION_TOKEN"))
 
+        currencyapi_token = os.getenv("CURRENCYAPI_TOKEN")
+
         test_guilds = os.getenv("TEST_GUILD_ID")
         if test_guilds is not None:
             test_guilds = [int(test_guilds)]
 
-        return Ok((bot_token, test_guilds))
+        return Ok((bot_token, currencyapi_token, test_guilds))

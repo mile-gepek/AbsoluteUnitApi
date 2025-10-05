@@ -83,7 +83,8 @@ def infer_target_unit(
 def convert_expression(
     quantity: PlainQuantity[float],
     target: str | None = None,
-) -> Result[PlainQuantity[float], ConversionError]:
+) -> Result[tuple[PlainQuantity[float], bool], ConversionError]:
+    has_currency = False
     if target is None:
         target_result = infer_target_unit(quantity)
         if isinstance(target_result, Err):
@@ -92,6 +93,7 @@ def convert_expression(
     else:
         try:
             unit_quantity = ureg(target)
+            has_currency = "[currency]" in unit_quantity.dimensionality
         except pint.errors.UndefinedUnitError as e:
             units = ", ".join(e.unit_names)
             return Err(ConversionError(f"Undefined target unit(s): {units}."))
@@ -99,7 +101,7 @@ def convert_expression(
         target_unit = UnitsContainer(unit_dict)
     try:
         converted: PlainQuantity[float] = quantity.to(target_unit).to_reduced_units()  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-        return Ok(converted)
+        return Ok((converted, has_currency))
     except pint.errors.DimensionalityError as e:
         return Err(
             ConversionError(
@@ -110,7 +112,7 @@ def convert_expression(
 
 def try_convert_expression(
     input: str, target: str | None = None
-) -> Result[tuple[parsing.Expression, PlainQuantity[float]], str]:
+) -> Result[tuple[parsing.Expression, PlainQuantity[float], bool], str]:
     parsing_result = parsing.parse(input)
     if isinstance(parsing_result, Err):
         errors = parsing_result.err_value
@@ -133,4 +135,4 @@ def try_convert_expression(
         output = f"```\n{input}\n{error_str}\n```"
         return Err(output)
 
-    return Ok((expression, converted_result.ok_value))
+    return Ok((expression, *converted_result.ok_value))

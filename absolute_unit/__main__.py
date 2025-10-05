@@ -8,26 +8,48 @@ from result import Err
 
 from absolute_unit.config import Config
 from absolute_unit.conversion import try_convert_expression
-from absolute_unit import ureg
+from absolute_unit import ureg, currencies
 
 
-config = Config.get_config().unwrap()
-if config.test_guilds is None:
-    logging.info("No test guilds specified, commands will be synced globally.")
-else:
-    logging.info("Testing mode on, all errors will not be ephemeral.")
-
-logger = logging.getLogger("disnake")
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-handler = logging.FileHandler(filename="disnake.log", encoding="utf-8", mode="w")
+handler = logging.FileHandler(filename="absolute_unit.log", encoding="utf-8", mode="w")
 handler.setFormatter(
     logging.Formatter("%(asctime)s:%(levelname)s:%(name)s: %(message)s")
 )
 logger.addHandler(handler)
 
+disnake_logger = logging.getLogger("disnake")
+disnake_logger.setLevel(logging.DEBUG)
+handler = logging.FileHandler(filename="disnake.log", encoding="utf-8", mode="w")
+handler.setFormatter(
+    logging.Formatter("%(asctime)s:%(levelname)s:%(name)s: %(message)s")
+)
+disnake_logger.addHandler(handler)
 
-bot = commands.InteractionBot(
-    test_guilds=config.test_guilds,
+
+class Bot(commands.InteractionBot):
+    def __init__(self, config: Config) -> None:
+        super().__init__(test_guilds=config.test_guilds)
+        self.config: Config = config
+        if config.test_guilds is None:
+            logger.info("No test guilds specified, commands will be synced globally.")
+        else:
+            logger.info("Testing mode on, all errors will not be ephemeral.")
+
+        self.currency_cog: currencies.CurrencyCog | None = None
+        currencyapi_token = config.currencyapi_token
+        if currencyapi_token is None:
+            logging.info(
+                "currencyapi token not found in config, currency conversion will be disabled."
+            )
+        else:
+            self.currency_cog = currencies.CurrencyCog(self, currencyapi_token, ureg)
+            self.add_cog(self.currency_cog)
+
+
+bot = Bot(
+    Config.get_config().unwrap(),
 )
 
 
@@ -55,9 +77,9 @@ async def convert(
     converted_result = try_convert_expression(input, target)
     if isinstance(converted_result, Err):
         return await interaction.send(
-            converted_result.err_value, ephemeral=config.ephemeral_errors
+            converted_result.err_value, ephemeral=bot.config.ephemeral_errors
         )
-    (expression, converted) = converted_result.ok_value
+    (expression, converted, has_currency) = converted_result.ok_value
 
     # TODO: move allodis to a bigh "post-process" function
     if converted.units == ureg.foot:
@@ -76,6 +98,13 @@ async def convert(
         output = f"```\n{input}\n```interpreting as\n```\n{expression}\n=\n{converted_str}\n```"
     else:
         output = f"`{input}` = `{converted_str}`"
+    if has_currency:
+        currency_cog = bot.currency_cog
+        if currency_cog is not None:
+            last_refresh = currency_cog.last_refresh_datetime
+            if last_refresh is not None:
+                timestamp = int(last_refresh.timestamp())
+                output += f"\n-# Currency exchange rates as of <t:{timestamp}:t>"
     _ = await interaction.send(output)
 
 
@@ -104,7 +133,7 @@ async def on_slash_command_error(
         msg = f"Error when attempting command:\n`{original_type_name}: {original_message}`\nThis is a bug."
     else:
         msg = f"Error when attempting command:\n`{original_type_name}`\nThis is a bug."
-    await interaction.send(msg, ephemeral=config.ephemeral_errors)
+    await interaction.send(msg, ephemeral=bot.config.ephemeral_errors)
 
 
 @bot.event
