@@ -4,6 +4,7 @@ import traceback
 
 import disnake
 from disnake.ext import commands
+from disnake.ext.commands import InteractionBot
 from result import Err
 
 from absolute_unit.config import Config
@@ -28,14 +29,10 @@ handler.setFormatter(
 disnake_logger.addHandler(handler)
 
 
-class Bot(commands.InteractionBot):
-    def __init__(self, config: Config) -> None:
-        super().__init__(test_guilds=config.test_guilds)
+class Bot:
+    def __init__(self, config: Config, client: InteractionBot) -> None:
         self.config: Config = config
-        if config.test_guilds is None:
-            logger.info("No test guilds specified, commands will be synced globally.")
-        else:
-            logger.info("Testing mode on, all errors will not be ephemeral.")
+        self.client: InteractionBot = client
 
         self.currency_cog: currencies.CurrencyCog | None = None
         currencyapi_token = config.currencyapi_token
@@ -44,17 +41,23 @@ class Bot(commands.InteractionBot):
                 "currencyapi token not found in config, currency conversion will be disabled."
             )
         else:
-            self.currency_cog = currencies.CurrencyCog(self, currencyapi_token, ureg)
-            self.add_cog(self.currency_cog)
+            self.currency_cog = currencies.CurrencyCog(
+                self.client, currencyapi_token, ureg
+            )
+            self.client.add_cog(self.currency_cog)
 
 
-bot = Bot(
-    Config.get_config().unwrap(),
-)
+config = Config.get_config().unwrap()
+if config.test_guilds is None:
+    logger.info("No test guilds specified, commands will be synced globally.")
+else:
+    logger.info("Testing mode on, all errors will not be ephemeral.")
+
+bot = Bot(config, InteractionBot(test_guilds=config.test_guilds))
 
 
 @commands.cooldown(1, 5, commands.BucketType.channel)
-@bot.slash_command()
+@bot.client.slash_command()
 async def convert(
     interaction: disnake.GuildCommandInteraction[commands.InteractionBot],
     input: str,
@@ -108,7 +111,7 @@ async def convert(
     _ = await interaction.send(output)
 
 
-@bot.event
+@bot.client.event
 async def on_slash_command_error(
     interaction: disnake.ApplicationCommandInteraction[commands.InteractionBot],
     error: commands.CommandInvokeError,
@@ -136,10 +139,10 @@ async def on_slash_command_error(
     await interaction.send(msg, ephemeral=bot.config.ephemeral_errors)
 
 
-@bot.event
+@bot.client.event
 async def on_ready() -> None:
-    print(f"Logged in as {bot.user} (ID: {bot.user.id})\n")
+    print(f"Logged in as {bot.client.user} (ID: {bot.client.user.id})\n")
 
 
 if __name__ == "__main__":
-    bot.run(os.getenv("DISCORD_APPLICATION_TOKEN"))
+    bot.client.run(os.getenv("DISCORD_APPLICATION_TOKEN"))
