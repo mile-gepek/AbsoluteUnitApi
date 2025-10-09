@@ -562,12 +562,18 @@ class Binary(Expression):
 
     def _as_str(self) -> str:
         """Neatly surrounds the expression with parentheses if it is implicit."""
+        s = str(self)
+        if self.implicit:
+            return f"({s})"
+        return s
 
-        if isinstance(self.left, Binary) and self.implicit:
+    @override
+    def __str__(self) -> str:
+        if isinstance(self.left, Binary) and not self.implicit:
             left = self.left._as_str()
         else:
             left = str(self.left)
-        if isinstance(self.right, Binary) and self.implicit:
+        if isinstance(self.right, Binary) and not self.implicit:
             right = self.right._as_str()
         else:
             right = str(self.right)
@@ -587,13 +593,6 @@ class Binary(Expression):
         else:
             s = f"{left} {self.op.value} {right}"
 
-        return s
-
-    @override
-    def __str__(self) -> str:
-        s = self._as_str()
-        if self.implicit:
-            return f"({s})"
         return s
 
     @override
