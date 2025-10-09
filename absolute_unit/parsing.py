@@ -539,7 +539,7 @@ class Binary(Expression):
 
     @override
     def is_unit(self) -> bool:
-        return self.left.is_unit() and self.right.is_unit()
+        return bool(self.dimensionality())
 
     @override
     def evaluate(self) -> Result[PlainQuantity[float], list[EvaluationError]]:
@@ -794,7 +794,7 @@ class Unit(Primary):
             )
         if not isinstance(other, Unit):
             return False
-        return self.unit == other.unit  # pyright: ignore [reportReturnType, reportUnknownVariableType]
+        return self.unit == other.unit  # pyright: ignore [reportReturnType]
 
 
 class Group(Expression):
@@ -1256,6 +1256,7 @@ def _parse_primary_chain(
 
     subexpressions: deque[Binary | Primary | Group] = deque()
     curr_subexpr: Float | Unit | Binary | None = None
+    curr_unit: Unit | Binary | None = None
     previous_token: FloatToken | UnitToken | None = None
     previous_unit: Unit | Binary | None = None
 
@@ -1285,7 +1286,6 @@ def _parse_primary_chain(
 
         elif isinstance(token, UnitToken):
             unit_token = token
-            curr_unit: Unit | Binary | None = None
             while isinstance(unit_token, UnitToken):
                 _ = tokens.popleft()
                 unit_res = _parse_unit(tokens, first=unit_token)
@@ -1350,6 +1350,8 @@ def _parse_primary_chain(
 
     if curr_subexpr is not None:
         subexpressions.append(curr_subexpr)
+    elif curr_unit is not None:
+        subexpressions.append(curr_unit)
 
     if error_group:
         return Err(error_group)
