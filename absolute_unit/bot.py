@@ -142,7 +142,11 @@ class ConversionCog(commands.Cog):
                 converted = converted.to("km/h")  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
             converted_str = f"{converted:.3g~P}"
 
-        output += f"`{input}` = `{converted_str}`"
+        output += f"`{input}` = `{converted_str}`\n"
+
+        same_unit = evaluated.unit_items() == target_unit.unit_items()
+        if same_unit and target:
+            output += "-# The input's unit and target unit are the same!"
 
         if has_currency:
             currency_cog = self.bot.currency_cog
@@ -150,7 +154,7 @@ class ConversionCog(commands.Cog):
                 last_refresh = currency_cog.last_refresh_datetime
                 if last_refresh is not None:
                     timestamp = int(last_refresh.timestamp())
-                    output += f"\n-# Currency exchange rates as of <t:{timestamp}:t>"
+                    output += f"-# Currency exchange rates as of <t:{timestamp}:t>"
 
         ephemeral = verbose and self.bot.config.test_guilds is None
         await interaction.send(output, ephemeral=ephemeral)
