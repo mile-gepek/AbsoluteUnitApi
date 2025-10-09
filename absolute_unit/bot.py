@@ -6,9 +6,10 @@ import disnake
 from disnake.ext import commands
 from disnake.ext.commands import InteractionBot
 from result import Err
+from rich.pretty import pprint
 
+from absolute_unit import conversion
 from absolute_unit.config import Config
-from absolute_unit.conversion import try_convert_expression
 from absolute_unit import ureg, currencies
 
 
@@ -74,12 +75,59 @@ class ConversionCog(commands.Cog):
         verbose:
             Print the intepretation of the parsed expression. Use this if output is unexpected.
         """
-        converted_result = try_convert_expression(input, target)
-        if isinstance(converted_result, Err):
+        expression_result = conversion.parse_input(input)
+        if isinstance(expression_result, Err):
+            error_message = f"```\n{input}\n{expression_result.err()}\n```"
+            if target is not None:
+                target_unit_result = conversion.get_target_unit(target)
+                if isinstance(target_unit_result, Err):
+                    error = target_unit_result.err()
+                    error_message += f"Target unit errors:```\n{error}\n```"
             return await interaction.send(
-                converted_result.err_value, ephemeral=self.bot.config.ephemeral_errors
+                error_message, ephemeral=self.bot.config.ephemeral_errors
             )
-        (expression, converted, has_currency) = converted_result.ok_value
+        expression = expression_result.ok()
+
+        output = ""
+        if verbose:
+            output = f"```\n{input}\n```interpreting as\n```\n{expression}\n```\n"
+
+        evaluation_result = conversion.evaluate_expression(expression)
+        if isinstance(evaluation_result, Err):
+            error_message = f"```\n{input}\n{evaluation_result.err()}\n```"
+            if target is not None:
+                target_unit_result = conversion.get_target_unit(target)
+                if isinstance(target_unit_result, Err):
+                    error = target_unit_result.err()
+                    error_message += f"Target unit errors:```\n{error}\n```"
+            output += error_message
+            return await interaction.send(
+                output, ephemeral=self.bot.config.ephemeral_errors
+            )
+        evaluated = evaluation_result.ok()
+
+        if target is None:
+            target_unit_result = conversion.infer_target_unit(evaluated)
+        else:
+            target_unit_result = conversion.get_target_unit(target)
+
+        if isinstance(target_unit_result, Err):
+            error = target_unit_result.err()
+            output += f"Target unit errors:```\n{error}\n```"
+            return await interaction.send(
+                output, ephemeral=self.bot.config.ephemeral_errors
+            )
+        target_unit = target_unit_result.ok()
+
+        conversion_result = conversion.convert(evaluated, target_unit)
+        if isinstance(conversion_result, Err):
+            output += conversion_result.err()
+            return await interaction.send(
+                output, ephemeral=self.bot.config.ephemeral_errors
+            )
+        converted = conversion_result.ok()
+
+        has_currency = "[currency]" in target_unit
 
         # TODO: move allodis to a bigh "post-process" function
         if converted.units == ureg.foot:
@@ -94,10 +142,8 @@ class ConversionCog(commands.Cog):
                 converted = converted.to("km/h")  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
             converted_str = f"{converted:.3g~P}"
 
-        if verbose:
-            output = f"```\n{input}\n```interpreting as\n```\n{expression}\n=\n{converted_str}\n```"
-        else:
-            output = f"`{input}` = `{converted_str}`"
+        output += f"`{input}` = `{converted_str}`"
+
         if has_currency:
             currency_cog = self.bot.currency_cog
             if currency_cog is not None:
@@ -105,7 +151,9 @@ class ConversionCog(commands.Cog):
                 if last_refresh is not None:
                     timestamp = int(last_refresh.timestamp())
                     output += f"\n-# Currency exchange rates as of <t:{timestamp}:t>"
-        _ = await interaction.send(output)
+
+        ephemeral = verbose and self.bot.config.test_guilds is None
+        await interaction.send(output, ephemeral=ephemeral)
 
     @commands.Cog.listener()
     async def on_slash_command_error(

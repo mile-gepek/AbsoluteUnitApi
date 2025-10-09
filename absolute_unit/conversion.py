@@ -26,12 +26,17 @@ imperial_to_metric = {
 }
 
 
-class ConversionError(Exception):
+class UnitError(Exception):
     pass
 
 
-class UnitInferError(ConversionError):
-    def __init__(self, *args: object) -> None:
+class InvalidUnitError(UnitError):
+    def __init__(self, unit: str) -> None:
+        super().__init__(f"Undefined target units: {unit}")
+
+
+class UnitInferError(UnitError):
+    def __init__(self) -> None:
         super().__init__("Can not infer target unit from expression.")
 
 
@@ -80,59 +85,43 @@ def infer_target_unit(
     return Ok(UnitsContainer(units))
 
 
-def convert_expression(
-    quantity: PlainQuantity[float],
-    target: str | None = None,
-) -> Result[tuple[PlainQuantity[float], bool], ConversionError]:
-    has_currency = False
-    if target is None:
-        target_result = infer_target_unit(quantity)
-        if isinstance(target_result, Err):
-            return target_result
-        target_unit = target_result.ok_value
-    else:
-        try:
-            unit_quantity = ureg(target)
-            has_currency = "[currency]" in unit_quantity.dimensionality
-        except pint.errors.UndefinedUnitError as e:
-            units = ", ".join(e.unit_names)
-            return Err(ConversionError(f"Undefined target unit(s): {units}."))
-        unit_dict = dict(unit_quantity.unit_items())
-        target_unit = UnitsContainer(unit_dict)
+def get_target_unit(target: str) -> Result[UnitsContainer, InvalidUnitError]:
     try:
-        converted: PlainQuantity[float] = quantity.to(target_unit).to_reduced_units()  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-        return Ok((converted, has_currency))
-    except pint.errors.DimensionalityError as e:
-        return Err(
-            ConversionError(
-                f"Mismatched dimensions of input '{e.dim1}' and target '{e.dim2}'."
-            )
-        )
+        unit_quantity = ureg(target)
+    except pint.errors.UndefinedUnitError as e:
+        units = ", ".join(e.unit_names)
+        return Err(InvalidUnitError(units))
+    unit_dict = dict(unit_quantity.unit_items())
+    return Ok(UnitsContainer(unit_dict))
 
 
-def try_convert_expression(
-    input: str, target: str | None = None
-) -> Result[tuple[parsing.Expression, PlainQuantity[float], bool], str]:
+def parse_input(input: str) -> Result[parsing.Expression, str]:
     parsing_result = parsing.parse(input)
     if isinstance(parsing_result, Err):
         errors = parsing_result.err_value
         errors_formatted = parsing.format_errors(errors, len(input))
-        output = f"```\n{input}\n{errors_formatted}\n```"
-        return Err(output)
-    expression = parsing_result.ok_value
+        return Err(errors_formatted)
+    return parsing_result
 
-    eval_result = expression.evaluate()
-    if isinstance(eval_result, Err):
-        errors = eval_result.err_value
-        errors_formatted = parsing.format_errors(errors, len(input))
-        output = f"```\n{input}\n{errors_formatted}\n```"
-        return Err(output)
-    evaluated = eval_result.ok_value
 
-    converted_result = convert_expression(evaluated, target)
-    if isinstance(converted_result, Err):
-        error_str = str(converted_result.err_value)
-        output = f"```\n{input}\n{error_str}\n```"
-        return Err(output)
+def evaluate_expression(
+    expression: parsing.Expression,
+) -> Result[PlainQuantity[float], str]:
+    evaluation_result = expression.evaluate()
+    if isinstance(evaluation_result, Err):
+        errors = evaluation_result.err_value
+        errors_formatted = parsing.format_errors(errors, expression.end())
+        return Err(errors_formatted)
+    return evaluation_result
 
-    return Ok((expression, *converted_result.ok_value))
+
+def convert(
+    quantity: PlainQuantity[float], target_unit: UnitsContainer
+) -> Result[PlainQuantity[float], str]:
+    try:
+        converted: PlainQuantity[float] = quantity.to(target_unit).to_reduced_units()  # pyright: ignore [reportUnknownVariableType, reportUnknownMemberType]
+    except pint.DimensionalityError as e:
+        return Err(
+            f"Mismatched dimensionalities between input `{e.dim1}` and target `{e.dim2}`"
+        )
+    return Ok(converted)
