@@ -119,6 +119,9 @@ class ConversionCog(commands.Cog):
             )
         target_unit = target_unit_result.ok()
 
+        # we only want to show the currency exchange hint if there is a
+        has_currency = conversion.has_different_currencies(evaluated, target_unit)
+
         conversion_result = conversion.convert(evaluated, target_unit)
         if isinstance(conversion_result, Err):
             output += conversion_result.err()
@@ -126,8 +129,6 @@ class ConversionCog(commands.Cog):
                 output, ephemeral=self.bot.config.ephemeral_errors
             )
         converted = conversion_result.ok()
-
-        has_currency = "[currency]" in target_unit
 
         # TODO: move allodis to a bigh "post-process" function
         if converted.units == ureg.foot:

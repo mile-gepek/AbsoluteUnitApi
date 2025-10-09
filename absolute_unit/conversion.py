@@ -87,12 +87,22 @@ def infer_target_unit(
 
 def get_target_unit(target: str) -> Result[UnitsContainer, InvalidUnitError]:
     try:
-        unit_quantity = ureg(target)
+        unit_quantity = ureg.Quantity(target)
     except pint.errors.UndefinedUnitError as e:
         units = ", ".join(e.unit_names)
         return Err(InvalidUnitError(units))
     unit_dict = dict(unit_quantity.unit_items())
     return Ok(UnitsContainer(unit_dict))
+
+
+def has_different_currencies(
+    quantity: PlainQuantity[float], target: UnitsContainer
+) -> bool:
+    q_units = UnitsContainer(quantity.unit_items())
+    difference = set(q_units) ^ set(target)
+    units = UnitsContainer({s: 0.1 for s in difference})
+    dim = ureg.get_dimensionality(units)
+    return "[currency]" in dim
 
 
 def parse_input(input: str) -> Result[parsing.Expression, str]:
