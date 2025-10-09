@@ -539,7 +539,7 @@ class Binary(Expression):
 
     @override
     def is_unit(self) -> bool:
-        return self.left.is_unit() or self.right.is_unit()
+        return self.left.is_unit() and self.right.is_unit()
 
     @override
     def evaluate(self) -> Result[PlainQuantity[float], list[EvaluationError]]:
@@ -576,8 +576,14 @@ class Binary(Expression):
             isinstance(self.left, Float)
             and self.right.is_unit()
             and self.op == OperatorType.MUL
+            and self.implicit
         ):
-            s = f"{left}{right}"
+            if isinstance(self.right, Unit):
+                s = f"{left}{right}"
+            else:
+                s = f"{left} {right}"
+        elif self.left.is_unit() and self.right.is_unit():
+            s = f"{left}{self.op.value}{right}"
         else:
             s = f"{left} {self.op.value} {right}"
 
