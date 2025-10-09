@@ -5,6 +5,7 @@ from typing import Self
 import disnake
 from disnake.ext import commands
 from disnake.ext.commands import InteractionBot
+from pint.facets.plain import PlainQuantity
 from result import Err
 
 from absolute_unit import conversion
@@ -103,7 +104,7 @@ class ConversionCog(commands.Cog):
             return await interaction.send(
                 output, ephemeral=self.bot.config.ephemeral_errors
             )
-        evaluated = evaluation_result.ok()
+        evaluated: PlainQuantity[float] = evaluation_result.ok().to_reduced_units()  # pyright: ignore [reportUnknownVariableType, reportUnknownMemberType]
 
         if target is None:
             target_unit_result = conversion.infer_target_unit(evaluated)
