@@ -1392,7 +1392,7 @@ def _parse_float(
         ops = (OperatorType.EXP,)
         term = Ok(Float(first.to_float(), *first.span()))
     else:
-        ops = (OperatorType.MUL, OperatorType.DIV)
+        ops = (OperatorType.DIV,)
         term = _parse_float(tokens, first=first, exp=True)
         if isinstance(term, Err):
             error_group.extend(term.err())
@@ -1491,7 +1491,7 @@ def _parse_unit(
         else:
             term = res
     else:
-        ops = (OperatorType.MUL, OperatorType.DIV)
+        ops = (OperatorType.DIV,)
         term = _parse_unit(tokens, first=first, exp=True)
         if isinstance(term, Err):
             error_group.extend(term.err())
