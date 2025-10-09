@@ -1,0 +1,11 @@
+version: "3.9"
+
+services:
+  bot:
+    container_name: AbsoluteUnitBot
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    restart: unless-stopped
