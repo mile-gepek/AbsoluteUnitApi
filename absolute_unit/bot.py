@@ -6,7 +6,6 @@ import disnake
 from disnake.ext import commands
 from disnake.ext.commands import InteractionBot
 from result import Err
-from rich.pretty import pprint
 
 from absolute_unit import conversion
 from absolute_unit.config import Config
