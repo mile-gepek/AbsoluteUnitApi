@@ -21,6 +21,11 @@ class Bot:
         self.config: Config = config
         self.client: InteractionBot = client
 
+        if config.test_guilds is None:
+            logger.info("No test guilds specified, commands will be synced globally.")
+        else:
+            logger.info("Testing mode on, all errors will not be ephemeral.")
+
         self.currency_cog: currencies.CurrencyCog | None = None
         currencyapi_token = config.currencyapi_token
         if currencyapi_token is None:
@@ -37,11 +42,6 @@ class Bot:
     @classmethod
     def default(cls) -> Self:
         config = Config.get_config().unwrap()
-        if config.test_guilds is None:
-            logger.info("No test guilds specified, commands will be synced globally.")
-        else:
-            logger.info("Testing mode on, all errors will not be ephemeral.")
-
         client = InteractionBot(test_guilds=config.test_guilds)
         return cls(config, client)
 
