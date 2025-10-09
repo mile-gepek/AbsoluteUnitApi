@@ -82,7 +82,7 @@ class CurrencyCog(commands.Cog):
     def last_refresh_datetime(self) -> datetime | None:
         return self._last_refresh_datetime
 
-    @tasks.loop(hours=12)
+    @tasks.loop(hours=24)
     async def refresh_currency_exchange_rates(self) -> None:
         async with self.currencyapi_session as session:
             params = {"base_currency": self.base_currency}
