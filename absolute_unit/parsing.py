@@ -1285,51 +1285,62 @@ def _parse_primary_chain(
                 continue
 
         elif isinstance(token, UnitToken):
-            _ = tokens.popleft()
-            unit_res = _parse_unit(tokens, first=token)
-            if isinstance(unit_res, Err):
-                error_group.extend(unit_res.err())
-                curr_subexpr = None
-                previous_unit = None
-                continue
-            unit = unit_res.ok()
+            unit_token = token
+            curr_unit: Unit | Binary | None = None
+            while isinstance(unit_token, UnitToken):
+                _ = tokens.popleft()
+                unit_res = _parse_unit(tokens, first=unit_token)
+                if isinstance(unit_res, Err):
+                    error_group.extend(unit_res.err())
+                    curr_subexpr = None
+                    previous_unit = None
+                    continue
+                unit = unit_res.ok()
 
-            if (
-                isinstance(previous_token, UnitToken)
-                and previous_unit is not None
-                and previous_unit.dimensionality() == unit.dimensionality()
-            ):
-                if not previous_unit_error:
-                    message = "Expected a number between units of same dimensionality."
-                    start = previous_unit.end()
-                    end = unit.start()
+                if (
+                    isinstance(previous_token, UnitToken)
+                    and previous_unit is not None
+                    and previous_unit.dimensionality() == unit.dimensionality()
+                ):
+                    if not previous_unit_error:
+                        message = (
+                            "Expected a number between units of same dimensionality."
+                        )
+                        start = previous_unit.end()
+                        end = unit.start()
+                        error_group.append(
+                            ExpectedPrimaryError(message=message, span=(start, end))
+                        )
+                    previous_unit = unit
+                    continue
+
+                if (
+                    previous_token is None
+                    and tokens
+                    and isinstance(tokens[0], (FloatToken, UnitToken))
+                    and not previous_unit_error
+                ):
+                    message = f"Expected number before the unit '{token.token}'."
                     error_group.append(
-                        ExpectedPrimaryError(message=message, span=(start, end))
+                        ExpectedPrimaryError(message=message, span=token.span())
                     )
+                    previous_unit_error = True
+                    continue
+
+                if curr_unit is None:
+                    curr_unit = unit
+                else:
+                    curr_unit = Binary(curr_unit, OperatorType.MUL, unit, implicit=True)
+
                 previous_unit = unit
-                continue
+                if not tokens:
+                    break
+                unit_token = tokens[0]
 
-            if (
-                previous_token is None
-                and tokens
-                and isinstance(tokens[0], (FloatToken, UnitToken))
-                and not previous_unit_error
-            ):
-                message = f"Expected number before the unit '{token.token}'."
-                error_group.append(
-                    ExpectedPrimaryError(message=message, span=token.span())
-                )
-                previous_unit_error = True
-                continue
-
-            if curr_subexpr is None:
-                curr_subexpr = unit
-            else:
+            if curr_unit is not None and curr_subexpr is not None:
                 curr_subexpr = Binary(
-                    curr_subexpr, OperatorType.MUL, unit, implicit=True
+                    curr_subexpr, OperatorType.MUL, curr_unit, implicit=True
                 )
-
-            previous_unit = unit
 
         else:
             break
