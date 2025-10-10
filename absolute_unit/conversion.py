@@ -30,6 +30,17 @@ class UnitError(Exception):
     pass
 
 
+class ConversionError(Exception):
+    pass
+
+
+class DimensionalityError(ConversionError):
+    def __init__(self, dim_1: str, dim_2: str) -> None:
+        super().__init__(
+            f"Mismatched dimensionalities between input `{dim_1}` and target `{dim_2}`"
+        )
+
+
 class InvalidUnitError(UnitError):
     def __init__(self, unit: str) -> None:
         super().__init__(f"Undefined target units: {unit}")
@@ -91,8 +102,8 @@ def get_target_unit(target: str) -> Result[UnitsContainer, InvalidUnitError]:
     except pint.errors.UndefinedUnitError as e:
         units = ", ".join(e.unit_names)
         return Err(InvalidUnitError(units))
-    unit_dict = dict(unit_quantity.unit_items())
-    return Ok(UnitsContainer(unit_dict))
+    unit_items = unit_quantity.unit_items()
+    return Ok(UnitsContainer(unit_items))
 
 
 def has_different_currencies(
@@ -127,11 +138,9 @@ def evaluate_expression(
 
 def convert(
     quantity: PlainQuantity[float], target_unit: UnitsContainer
-) -> Result[PlainQuantity[float], str]:
+) -> Result[PlainQuantity[float], ConversionError]:
     try:
         converted: PlainQuantity[float] = quantity.to(target_unit).to_reduced_units()  # pyright: ignore [reportUnknownVariableType, reportUnknownMemberType]
     except pint.DimensionalityError as e:
-        return Err(
-            f"Mismatched dimensionalities between input `{e.dim1}` and target `{e.dim2}`"
-        )
+        return Err(DimensionalityError(e.dim1, e.dim2))
     return Ok(converted)

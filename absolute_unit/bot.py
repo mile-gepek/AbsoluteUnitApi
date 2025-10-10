@@ -75,6 +75,7 @@ class ConversionCog(commands.Cog):
         verbose:
             Print the intepretation of the parsed expression. Use this if output is unexpected.
         """
+        # TODO: maybe clean this up by raising all errors, so the slash_command_error event can handle them
         expression_result = conversion.parse_input(input)
         if isinstance(expression_result, Err):
             error_message = f"```\n{input}\n{expression_result.err()}\n```"
@@ -119,12 +120,11 @@ class ConversionCog(commands.Cog):
             )
         target_unit = target_unit_result.ok()
 
-        # we only want to show the currency exchange hint if there is a
         has_currency = conversion.has_different_currencies(evaluated, target_unit)
 
         conversion_result = conversion.convert(evaluated, target_unit)
         if isinstance(conversion_result, Err):
-            output += conversion_result.err()
+            output += str(conversion_result.err())
             return await interaction.send(
                 output, ephemeral=self.bot.config.ephemeral_errors
             )
