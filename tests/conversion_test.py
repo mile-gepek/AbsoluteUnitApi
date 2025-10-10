@@ -1,16 +1,25 @@
+from pint.util import UnitsContainer
 import pytest
 from result import Err, Ok
 
 from absolute_unit import ureg
 
 from absolute_unit.conversion import (
+    ConversionError,
+    DimensionalityError,
     metric_to_imperial,
     imperial_to_metric,
     infer_target_unit,
-    convert_expression,
-    ConversionError,
+    convert,
+    UnitError,
     UnitInferError,
 )
+
+
+def str_to_units_container(units: str) -> UnitsContainer:
+    quantity = ureg.Quantity(units)
+    unit_container = UnitsContainer(quantity.unit_items())
+    return unit_container
 
 
 @pytest.mark.parametrize("metric, imperial", list(metric_to_imperial.items()))
@@ -67,20 +76,6 @@ def test_infer_target_unit_mixed_metric_and_imperial_speed():
         ("kilogram", "pound"),
         ("gram", "ounce"),
         ("kilometer / hour", "mile / hour"),
-    ],
-)
-def test_convert_expression_metric_to_imperial(src_unit: str, expected_unit: str):
-    qty = ureg(src_unit)
-    result = convert_expression(qty)
-
-    assert isinstance(result, Ok)
-    converted = result.ok()
-    assert expected_unit in str(converted.units)
-
-
-@pytest.mark.parametrize(
-    "src_unit, expected_unit",
-    [
         ("mile", "kilometer"),
         ("foot", "meter"),
         ("inch", "centimeter"),
@@ -88,41 +83,14 @@ def test_convert_expression_metric_to_imperial(src_unit: str, expected_unit: str
         ("mile / hour", "kilometer / hour"),
     ],
 )
-def test_convert_expression_imperial_to_metric(src_unit: str, expected_unit: str):
+def test_convert(src_unit: str, expected_unit: str):
     qty = ureg(src_unit)
-    result = convert_expression(qty)
+    target = str_to_units_container(expected_unit)
+    result = convert(qty, target)
 
     assert isinstance(result, Ok)
     converted = result.ok()
     assert expected_unit in str(converted.units)
-
-
-@pytest.mark.parametrize(
-    "src_unit, target_unit",
-    [
-        ("meter", "kilometer"),
-        ("newton * meter", "foot_pound"),
-    ],
-)
-def test_convert_expression_with_explicit_target(src_unit: str, target_unit: str):
-    qty = ureg(src_unit)
-    result = convert_expression(qty, target=target_unit)
-
-    assert isinstance(result, Ok)
-    converted = result.ok()
-    assert target_unit in str(converted.units)
-
-
-@pytest.mark.parametrize("bad_unit", ["abc", "blasdf"])
-def test_convert_expression_with_unknown_target_units(bad_unit: str):
-    qty = ureg("meter")
-
-    result = convert_expression(qty, target=bad_unit)
-
-    assert isinstance(result, Err)
-    error = result.err()
-    assert isinstance(error, ConversionError)
-    assert "Undefined target unit" in str(error)
 
 
 @pytest.mark.parametrize(
@@ -135,9 +103,9 @@ def test_convert_expression_with_unknown_target_units(bad_unit: str):
 )
 def test_convert_expression_dimensionality_mismatch(src_unit: str, target_unit: str):
     qty = ureg(src_unit)
-    result = convert_expression(qty, target=target_unit)
+    target = str_to_units_container(target_unit)
+    result = convert(qty, target)
 
     assert isinstance(result, Err)
     error = result.err()
-    assert isinstance(error, ConversionError)
-    assert "Mismatched dimensions" in str(error)
+    assert isinstance(error, DimensionalityError)
