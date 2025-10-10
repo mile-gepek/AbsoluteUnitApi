@@ -533,7 +533,8 @@ class Binary(Expression):
             case OperatorType.DIV:
                 return self.left.dimensionality() / self.right.dimensionality()
             case OperatorType.EXP:
-                return self.left.dimensionality() * self.right.dimensionality()
+                assert isinstance(self.right, Float)
+                return self.left.dimensionality() ** self.right.value
             case _:
                 return self.left.dimensionality()
 
@@ -1281,15 +1282,18 @@ def _parse_primary_chain(
                         ExpectedPrimaryError(message=message, span=(start, end))
                     )
                 previous_number_error = True
+                previous_token = token
                 continue
 
         elif isinstance(token, UnitToken):
             _ = tokens.popleft()
+            second = tokens[0] if tokens else None
             unit_res = _parse_unit(tokens, first=token)
             if isinstance(unit_res, Err):
                 error_group.extend(unit_res.err())
                 curr_subexpr = None
                 previous_unit = None
+                previous_token = token
                 continue
             unit = unit_res.ok()
 
@@ -1305,20 +1309,9 @@ def _parse_primary_chain(
                     error_group.append(
                         ExpectedPrimaryError(message=message, span=(start, end))
                     )
-                previous_unit = unit
-                continue
-
-            if (
-                previous_token is None
-                and tokens
-                and isinstance(tokens[0], (FloatToken, UnitToken))
-                and not previous_unit_error
-            ):
-                message = f"Expected number before the unit '{token.token}'."
-                error_group.append(
-                    ExpectedPrimaryError(message=message, span=token.span())
-                )
                 previous_unit_error = True
+                previous_unit = unit
+                previous_token = token
                 continue
 
             if curr_subexpr is None:
