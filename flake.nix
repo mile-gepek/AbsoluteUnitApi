@@ -1,26 +1,34 @@
 {
-  description = "python_flake";
+  description = "A simple flake including pytest for development";
 
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  };
+  inputs.pyproject-nix.url = "github:pyproject-nix/pyproject.nix";
+  inputs.pyproject-nix.inputs.nixpkgs.follows = "nixpkgs";
 
-  outputs = { nixpkgs, ... }: let
-    pkgs = nixpkgs.legacyPackages."x86_64-linux";
-  in {
-    devShells.x86_64-linux.default = pkgs.mkShell {
-      packages = with pkgs; [
-        (pkgs.python313.withPackages(pypkgs: with pypkgs; [
-          pytest
-          pint
-          result
-          rich
-          disnake
-          python-dotenv
-        ]))
-        ruff
-        basedpyright
-      ];
+  outputs =
+    { nixpkgs, pyproject-nix, ... }:
+    let
+      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+
+      python = pkgs.python313;
+      project = pyproject-nix.lib.project.loadPyproject {
+        projectRoot = ./.;
+      };
+    in
+    {
+      devShells.x86_64-linux.default =
+        let
+          arg = project.renderers.mkPythonEditablePackage { inherit python; };
+          pythonEnv = python.pkgs.mkPythonEditablePackage arg;
+        in
+        pkgs.mkShell {
+          packages = [
+            pythonEnv
+
+            python.pkgs.pytest
+
+            pkgs.ruff
+            pkgs.basedpyright
+          ];
+        };
     };
-  };
 }
