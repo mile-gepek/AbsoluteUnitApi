@@ -1,5 +1,10 @@
 from absolute_unit.bot import Bot
 
-if __name__ == "__main__":
+def main() -> int:
     bot = Bot.default()
     bot.run()
+
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())
