@@ -31,10 +31,8 @@ from absolute_unit.parsing import (
     Whitespace,
     _parse_primary,
     _parse_unary,
-    _parse_primary_chain,
     _parse_group,
-    _parse_float,
-    _parse_unit,
+    _parse_primary_expression,
     _parse_expr,
     tokenize,
 )
@@ -358,14 +356,16 @@ def test_parse_group_unmatched_opening_paren_error() -> None:
 
 
 def test_parse_float_standalone() -> None:
-    parsed = _parse_float(deque(), first=float_token(3))
+    tokens: deque[Token] = deque([float_token(3)])
+    parsed = _parse_primary_expression(Float, tokens)
     mock_result = float_mock(3)
     assert isinstance(parsed, Ok)
     assert parsed.ok() == mock_result
 
 
 def test_parse_unit_standalone() -> None:
-    parsed = _parse_unit(deque(), first=unit_token("km"))
+    tokens: deque[Token] = deque([unit_token("km")])
+    parsed = _parse_primary_expression(Unit, tokens)
     mock_result = unit_mock("km")
     assert isinstance(parsed, Ok)
     assert parsed.ok() == mock_result
@@ -373,13 +373,13 @@ def test_parse_unit_standalone() -> None:
 
 def test_parse_unit_standalone_leftover() -> None:
     """_parse_unit should not do implicit operations, so the 2nd token should be leftover"""
-    tokens = deque(
+    tokens: deque[Token] = deque(
         [
             unit_token("N"),
             unit_token("m"),
         ]
     )
-    parsed = _parse_unit(deque(), first=tokens.popleft())
+    parsed = _parse_primary_expression(Unit, tokens)
     assert isinstance(parsed, Ok)
     mock_result = unit_mock("N")
     assert parsed.ok() == mock_result
@@ -400,7 +400,7 @@ def test_parse_unit_invalid_unit_complex() -> None:
             unit_token("def"),
         ]
     )
-    result = _parse_unit(tokens, first=tokens.popleft())  # pyright: ignore[reportArgumentType]
+    result = _parse_primary_expression(Unit, tokens)
     assert isinstance(result, Err)
     errors = result.err()
     assert isinstance(errors[0], UndefinedUnitError)
@@ -415,7 +415,7 @@ def test_parse_float_power_float() -> None:
             float_token(2),
         ]
     )
-    parsed = _parse_float(tokens, first=tokens.popleft())  # pyright: ignore[reportArgumentType]
+    parsed = _parse_primary_expression(Float, tokens)
     assert isinstance(parsed, Ok)
     mock_result = Binary(
         float_mock(4),
@@ -434,7 +434,7 @@ def test_parse_unit_power_float() -> None:
             float_token(2),
         ]
     )
-    parsed = _parse_unit(tokens, first=tokens.popleft())  # pyright: ignore[reportArgumentType]
+    parsed = _parse_primary_expression(Unit, tokens)
     assert isinstance(parsed, Ok)
     mock_result = Binary(
         unit_mock("km"),
@@ -446,8 +446,14 @@ def test_parse_unit_power_float() -> None:
 
 
 def test_parse_unit_power_error() -> None:
-    tokens: deque[Token] = deque([unit_token("km"), op_exp, unit_token("km")])
-    result = _parse_unit(tokens, first=tokens.popleft())  # pyright: ignore[reportArgumentType]
+    tokens: deque[Token] = deque(
+        [
+            unit_token("km"),
+            op_exp,
+            unit_token("km"),
+        ]
+    )
+    result = _parse_primary_expression(Unit, tokens)
     assert isinstance(result, Err)
     errors = result.err()
     assert isinstance(errors[0], ExpectedPrimaryError)
@@ -457,6 +463,7 @@ def test_parse_unit_power_error() -> None:
 def test_parse_unit_power_groupexpr() -> None:
     tokens: deque[Token] = deque(
         [
+            unit_token("km"),
             op_exp,
             left_paren,
             float_token(1),
@@ -465,7 +472,7 @@ def test_parse_unit_power_groupexpr() -> None:
             right_paren,
         ]
     )
-    parsed = _parse_unit(tokens, first=unit_token("km"))
+    parsed = _parse_primary_expression(Unit, tokens)
     assert isinstance(parsed, Ok)
     # mock_result: km ** (1 + 1)
     mock_result = Binary(
@@ -631,23 +638,4 @@ def test_primary_chain_format_error() -> None:
     assert isinstance(error_1, ExpectedPrimaryError) and "number between units" in str(
         error_1
     )
-    assert not tokens
-
-
-def test_parse_primary_chain_expected_float_error() -> None:
-    """
-    The chain "m 6 ft" is invalid because the first unit is missing a number in front.
-    """
-    tokens: deque[Token] = deque(
-        [
-            unit_token("m"),
-            float_token(6),
-            unit_token("ft"),
-        ]
-    )
-    result = _parse_primary_chain(tokens)
-    assert isinstance(result, Err)
-    errors = result.err()
-    assert isinstance(errors[0], ExpectedPrimaryError)
-    assert "number before the unit" in str(errors)
     assert not tokens
