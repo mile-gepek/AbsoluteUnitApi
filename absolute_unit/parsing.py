@@ -559,7 +559,12 @@ class Binary(Expression):
 
         if errors:
             return Err(errors)
-        return Ok(op(left.unwrap(), right.unwrap()))
+        try:
+            return Ok(op(left.unwrap(), right.unwrap()))
+        except OverflowError:
+            return Err([EvaluationError("Overflow error.", self.span())])
+        except pint.errors.PintError as e:
+            return Err([EvaluationError(str(e), self.span())])
 
     def _as_str(self) -> str:
         """Neatly surrounds the expression with parentheses if it is implicit."""
