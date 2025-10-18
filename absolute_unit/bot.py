@@ -4,7 +4,6 @@ from typing import Self
 
 import disnake
 from disnake.ext import commands
-from disnake.ext.commands import InteractionBot
 from pint import UnitRegistry
 from pint.facets.plain import PlainQuantity
 from result import Err
@@ -16,12 +15,12 @@ from absolute_unit.config import Config
 logger = logging.getLogger(__name__)
 
 
-class Bot:
+class Bot(commands.InteractionBot):
     def __init__(
-        self, config: Config, client: InteractionBot, ureg: UnitRegistry
+        self, config: Config, client: commands.InteractionBot, ureg: UnitRegistry
     ) -> None:
+        super().__init__(test_guilds=config.test_guilds)
         self.config: Config = config
-        self.client: InteractionBot = client
         self.ureg: UnitRegistry = ureg
 
         if config.test_guilds is None:
@@ -36,32 +35,37 @@ class Bot:
                 "currencyapi token not found in config, currency conversion will be disabled."
             )
         else:
-            self.currency_cog = currencies.CurrencyCog(
-                self.client, currencyapi_token, ureg
-            )
-            self.client.add_cog(self.currency_cog)
-        self.client.add_cog(ConversionCog(self))
+            self.currency_cog = currencies.CurrencyCog(self, currencyapi_token, ureg)
+            self.add_cog(self.currency_cog)
+        self.add_cog(ConversionCog(self))
 
     @classmethod
     def default(cls) -> Self:
         config = Config.get_config().unwrap()
-        client = InteractionBot(test_guilds=config.test_guilds)
+        client = commands.InteractionBot(test_guilds=config.test_guilds)
         ureg = UnitRegistry()
         return cls(config, client, ureg)
 
-    def run(self) -> None:
-        self.client.run(self.config.bot_token)
+
+def cooldown_check(
+    interaction: disnake.ApplicationCommandInteraction[Bot],
+) -> commands.Cooldown | None:
+    if interaction.bot.config.testing_mode:
+        return None
+    return commands.Cooldown(1, 5)
 
 
 class ConversionCog(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot: Bot = bot
 
-    @commands.cooldown(1, 5, commands.BucketType.channel)
+    # disnake's typing on dynamic_cooldown requires the check's argument to be Message,
+    # but it allows (and should be typed to allow) interactions
+    @commands.dynamic_cooldown(cooldown_check, commands.BucketType.member)  # pyright: ignore[reportArgumentType]
     @commands.slash_command()
     async def convert(
         self,
-        interaction: disnake.GuildCommandInteraction[commands.InteractionBot],
+        interaction: disnake.GuildCommandInteraction[Bot],
         input: str,
         # TODO: converters can be used here
         target: str | None = None,
@@ -89,7 +93,7 @@ class ConversionCog(commands.Cog):
                     error = target_unit_result.err()
                     error_message += f"Target unit errors:```\n{error}\n```"
             return await interaction.send(
-                error_message, ephemeral=self.bot.config.ephemeral_errors
+                error_message, ephemeral=self.bot.config.testing_mode
             )
         expression = expression_result.ok()
 
@@ -107,7 +111,7 @@ class ConversionCog(commands.Cog):
                     error_message += f"Target unit errors:```\n{error}\n```"
             output += error_message
             return await interaction.send(
-                output, ephemeral=self.bot.config.ephemeral_errors
+                output, ephemeral=self.bot.config.testing_mode
             )
         evaluated: PlainQuantity[float] = evaluation_result.ok().to_reduced_units()  # pyright: ignore [reportUnknownVariableType, reportUnknownMemberType]
 
@@ -120,7 +124,7 @@ class ConversionCog(commands.Cog):
             error = target_unit_result.err()
             output += f"Target unit errors:```\n{error}\n```"
             return await interaction.send(
-                output, ephemeral=self.bot.config.ephemeral_errors
+                output, ephemeral=self.bot.config.testing_mode
             )
         target_unit = target_unit_result.ok()
 
@@ -134,7 +138,7 @@ class ConversionCog(commands.Cog):
         if isinstance(conversion_result, Err):
             output += str(conversion_result.err())
             return await interaction.send(
-                output, ephemeral=self.bot.config.ephemeral_errors
+                output, ephemeral=self.bot.config.testing_mode
             )
         converted = conversion_result.ok()
 
@@ -194,8 +198,8 @@ class ConversionCog(commands.Cog):
             msg = f"Error when attempting command:\n`{original_type_name}: {original_message}`\nThis is a bug."
         else:
             msg = f"Error when attempting command:\n`{original_type_name}`\nThis is a bug."
-        await interaction.send(msg, ephemeral=self.bot.config.ephemeral_errors)
+        await interaction.send(msg, ephemeral=self.bot.config.testing_mode)
 
     @commands.Cog.listener()
     async def on_ready(self) -> None:
-        print(f"Logged in as {self.bot.client.user} (ID: {self.bot.client.user.id})\n")
+        print(f"Logged in as {self.bot.user} (ID: {self.bot.user.id})\n")
