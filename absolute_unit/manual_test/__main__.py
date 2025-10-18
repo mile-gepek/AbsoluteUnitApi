@@ -8,7 +8,7 @@ ureg = UnitRegistry()
 
 
 if __name__ == "__main__":
-    while inp := input("Expression: ").rstrip():
+    while inp := input("Expression:\n").rstrip():
         expr_res = conversion.parse_input(inp, ureg)
         if isinstance(expr_res, Err):
             print(expr_res.err())
@@ -21,7 +21,7 @@ if __name__ == "__main__":
             continue
         eval = eval_res.ok()
 
-        target = input("Target: ") or None
+        target = input("Target:\n") or None
         if target is None:
             target_unit_res = conversion.infer_target_unit(eval, ureg)
         else:
