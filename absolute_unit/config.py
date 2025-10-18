@@ -50,7 +50,7 @@ class Config:
         self.test_guilds: list[int] | None = test_guilds
 
     @property
-    def ephemeral_errors(self) -> bool:
+    def testing_mode(self) -> bool:
         return self.test_guilds is None
 
     @classmethod
