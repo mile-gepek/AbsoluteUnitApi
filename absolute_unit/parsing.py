@@ -19,18 +19,15 @@ from pint.util import UnitsContainer
 
 from result import Result, Ok, Err
 
-from absolute_unit import ureg
-
 __all__ = [
     "tokenize",
-    "parse",
+    "Parser",
     "format_errors",
     "Error",
     "ParsingError",
     "EvaluationError",
     "EOL",
     "_EOL",
-    "ureg",
 ]
 
 
@@ -468,6 +465,7 @@ class Expression(abc.ABC):
     @abc.abstractmethod
     def evaluate(
         self,
+        ureg: pint.UnitRegistry,
     ) -> Result[PlainQuantity[float], list[EvaluationError]]:
         """
         Evaluate this expression with the global UnitRegistry and context settings.
@@ -543,12 +541,14 @@ class Binary(Expression):
         return bool(self.dimensionality())
 
     @override
-    def evaluate(self) -> Result[PlainQuantity[float], list[EvaluationError]]:
+    def evaluate(
+        self, ureg: pint.UnitRegistry
+    ) -> Result[PlainQuantity[float], list[EvaluationError]]:
         op = _BINARY_OP_MAP[self.op]
         errors: list[EvaluationError] = []
 
-        left = self.left.evaluate()
-        right = self.right.evaluate()
+        left = self.left.evaluate(ureg)
+        right = self.right.evaluate(ureg)
         if isinstance(left, Err):
             errors.extend(left.err())
         if isinstance(right, Err):
@@ -644,8 +644,10 @@ class Unary(Expression):
         return self.value.is_unit()
 
     @override
-    def evaluate(self) -> Result[PlainQuantity[float], list[EvaluationError]]:
-        value = self.value.evaluate()
+    def evaluate(
+        self, ureg: pint.UnitRegistry
+    ) -> Result[PlainQuantity[float], list[EvaluationError]]:
+        value = self.value.evaluate(ureg)
         if isinstance(value, Err):
             return value
         op = _UNARY_OP_MAP[self.op]
@@ -683,7 +685,9 @@ class Primary(Expression, abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def from_token(cls, token: Token) -> Result[Self, ParsingError]: ...
+    def from_token(
+        cls, token: Token, ureg: pint.UnitRegistry
+    ) -> Result[Self, ParsingError]: ...
 
     @override
     def start(self) -> int:
@@ -706,7 +710,9 @@ class Float(Primary):
 
     @override
     @classmethod
-    def from_token(cls, token: Token) -> Result[Self, ParsingError]:
+    def from_token(
+        cls, token: Token, ureg: pint.UnitRegistry
+    ) -> Result[Self, ParsingError]:
         match token:
             case FloatToken():
                 return Ok(cls(token.to_float(), *token.span()))
@@ -726,7 +732,9 @@ class Float(Primary):
         return False
 
     @override
-    def evaluate(self) -> Result[PlainQuantity[float], list[EvaluationError]]:
+    def evaluate(
+        self, ureg: pint.UnitRegistry
+    ) -> Result[PlainQuantity[float], list[EvaluationError]]:
         return Ok(ureg.Quantity(self._value))
 
     @override
@@ -768,7 +776,9 @@ class Unit(Primary):
         self._as_str: str = as_str
 
     @classmethod
-    def try_new(cls, unit_token: UnitToken) -> Result[Self, UndefinedUnitError]:
+    def try_new(
+        cls, unit_token: UnitToken, ureg: pint.UnitRegistry
+    ) -> Result[Self, UndefinedUnitError]:
         try:
             unit = ureg.Quantity(unit_token.token)
         except pint.UndefinedUnitError:
@@ -777,10 +787,12 @@ class Unit(Primary):
 
     @override
     @classmethod
-    def from_token(cls, token: Token) -> Result[Self, ParsingError]:
+    def from_token(
+        cls, token: Token, ureg: pint.UnitRegistry
+    ) -> Result[Self, ParsingError]:
         match token:
             case UnitToken():
-                return cls.try_new(token)
+                return cls.try_new(token, ureg)
             case _:
                 return Err(UnexpectedTokenError(token, expected="number"))
 
@@ -793,7 +805,9 @@ class Unit(Primary):
         return True
 
     @override
-    def evaluate(self) -> Result[PlainQuantity[float], list[EvaluationError]]:
+    def evaluate(
+        self, ureg: pint.UnitRegistry
+    ) -> Result[PlainQuantity[float], list[EvaluationError]]:
         return Ok(self.unit)
 
     @override
@@ -815,7 +829,7 @@ class Unit(Primary):
             )
         if not isinstance(other, Unit):
             return False
-        return self.unit == other.unit  # pyright: ignore [reportReturnType]
+        return self.unit == other.unit  # pyright: ignore [reportReturnType, reportUnknownVariableType]
 
 
 class Group(Expression):
@@ -842,8 +856,10 @@ class Group(Expression):
         return self.expr.is_unit()
 
     @override
-    def evaluate(self) -> Result[PlainQuantity[float], list[EvaluationError]]:
-        return self.expr.evaluate()
+    def evaluate(
+        self, ureg: pint.UnitRegistry
+    ) -> Result[PlainQuantity[float], list[EvaluationError]]:
+        return self.expr.evaluate(ureg)
 
     @override
     def __str__(self) -> str:
@@ -991,479 +1007,488 @@ def format_errors(errors: Sequence[Error], input_len: int) -> str:
     return "\n".join(error_lines)
 
 
-def parse(input: str) -> Result[Expression, list[ParsingError]]:
-    """
-    Try to parse the given input expression.
+class Parser:
+    def __init__(self, ureg: pint.UnitRegistry) -> None:
+        self.ureg: pint.UnitRegistry = ureg
 
-    Errors
-    ------
-    - List of `ParsingError` for issues when parsing.
-    """
-    input = input.replace('"', "in")
-    input = input.replace("''", "in")
-    input = input.replace("'", "ft")
-    tokens = list(tokenize(input))
-    result = _parse_expr(deque(tokens))
-    return result
+    def parse(self, input: str) -> Result[Expression, list[ParsingError]]:
+        """
+        Try to parse the given input expression.
 
+        Errors
+        ------
+        - List of `ParsingError` for issues when parsing.
+        """
+        input = input.replace('"', "in")
+        input = input.replace("''", "in")
+        input = input.replace("'", "ft")
+        tokens = list(tokenize(input))
+        result = self._parse_expr(deque(tokens))
+        return result
 
-def _parse_expr(
-    tokens: deque[Token],
-) -> Result[Expression, list[ParsingError]]:
-    return _parse_sum(tokens)
+    def _parse_expr(
+        self,
+        tokens: deque[Token],
+    ) -> Result[Expression, list[ParsingError]]:
+        return self._parse_sum(tokens)
 
+    def _parse_binary(
+        self,
+        tokens: deque[Token],
+        ops: tuple[OperatorType, ...],
+    ) -> Result[Expression, list[ParsingError]]:
+        """
+        A generic algorithm for parsing binary operations.
 
-def _parse_binary(
-    tokens: deque[Token], ops: tuple[OperatorType, ...]
-) -> Result[Expression, list[ParsingError]]:
-    """
-    A generic algorithm for parsing binary operations.
+        The expression gets parsed in the following way:
+        1. Decide what the term is.
+            - If we're parsing a sum, we look for unary operations (see `_parse_unary`).
+                - This way `-3 + 4` doesn't turn into `-(3 + 4)`, but we guarantee multiplication and exponentiation have higher precedence.
+            - If we're parsing factors, look for smaller exponent expressions.
+            - If we're parsing an exponentiation, look for "primary" terms (see `_parse_primary`).
+        2. Parse one term (the starting left term).
+        3. Repeatedly pop an operator and try to parse the `right` term. Then construct a Binary with the current terms.
 
-    The expression gets parsed in the following way:
-    1. Decide what the term is.
-        - If we're parsing a sum, we look for unary operations (see `_parse_unary`).
-            - This way `-3 + 4` doesn't turn into `-(3 + 4)`, but we guarantee multiplication and exponentiation have higher precedence.
-        - If we're parsing factors, look for smaller exponent expressions.
-        - If we're parsing an exponentiation, look for "primary" terms (see `_parse_primary`).
-    2. Parse one term (the starting left term).
-    3. Repeatedly pop an operator and try to parse the `right` term. Then construct a Binary with the current terms.
+        Errors
+        ------
+        - Any errors propagated from parsing primary terms in `_parse_primary`.
 
-    Errors
-    ------
-    - Any errors propagated from parsing primary terms in `_parse_primary`.
+        - Errors get reported for all terms, hopefully this makes it easier to debug and use.
+            - e.g. "(1 / 0) + (2 / 0)" will report errors for both parenthesis.
+        """
 
-    - Errors get reported for all terms, hopefully this makes it easier to debug and use.
-        - e.g. "(1 / 0) + (2 / 0)" will report errors for both parenthesis.
-    """
+        error_group: list[ParsingError] = []
 
-    error_group: list[ParsingError] = []
+        match ops[0]:
+            case OperatorType.ADD | OperatorType.SUB:
+                parse_term = self._parse_unary
+            case OperatorType.MUL | OperatorType.DIV:
+                parse_term = self._parse_exp
+            case OperatorType.EXP:
+                parse_term = self._parse_primary
 
-    match ops[0]:
-        case OperatorType.ADD | OperatorType.SUB:
-            parse_term = _parse_unary
-        case OperatorType.MUL | OperatorType.DIV:
-            parse_term = _parse_exp
-        case OperatorType.EXP:
-            parse_term = _parse_primary
-
-    term = parse_term(tokens)
-    if isinstance(term, Err):
-        error_group.extend(term.err())
-
-    while tokens:
-        token = tokens[0]
-        op_type = None
-        if isinstance(token, UnknownToken):
-            expected = "operator or group expression"
-            error_group.append(UnexpectedTokenError(token, expected=expected))
-            _ = tokens.popleft()
-        elif isinstance(token, OperatorToken):
-            if token.op_type not in ops:
-                break
-            op_type = token.op_type
-            _ = tokens.popleft()
-        # Implicit multiplication
-        elif OperatorType.MUL in ops:
-            op_type = OperatorType.MUL
-        else:
-            break
-
-        right = parse_term(tokens)
-        if isinstance(right, Err):
-            error_group.extend(right.err())
-
-        elif op_type is not None:
-            right_val = right.ok()
-            if (
-                isinstance(right_val, Float)
-                and right_val.value == 0
-                and op_type == OperatorType.DIV
-            ):
-                error_group.append(DivisionByZeroError(right_val))
-            elif isinstance(term, Ok):
-                match Binary.try_new(term.ok(), op_type, right_val):
-                    case Err(err) if isinstance(err, DimensionalityError):
-                        error_group.append(err)
-                    case res:
-                        term = Ok(
-                            res.expect(
-                                "Can not be DivisionByZero because we check in the if above"
-                            )
-                        )
-
-    if error_group:
-        return Err(error_group)
-    return term
-
-
-def _parse_sum(
-    tokens: deque[Token],
-) -> Result[Expression, list[ParsingError]]:
-    return _parse_binary(tokens, (OperatorType.ADD, OperatorType.SUB))
-
-
-def _parse_mul(
-    tokens: deque[Token],
-) -> Result[Expression, list[ParsingError]]:
-    return _parse_binary(tokens, (OperatorType.MUL, OperatorType.DIV))
-
-
-def _parse_exp(
-    tokens: deque[Token],
-) -> Result[Expression, list[ParsingError]]:
-    return _parse_binary(tokens, (OperatorType.EXP,))
-
-
-def _parse_unary(
-    tokens: deque[Token],
-) -> Result[Expression, list[ParsingError]]:
-    """
-    Parse a sequence of unary operations, the tree is created from the innermost operation.
-
-    Example
-    -------
-    - `+-3` turns into `Unary(ADD, Unary(SUB, Float(3)))`.
-
-    Errors
-    ------
-    - `InvalidUnaryError`
-        - Any operator not found in the unary operator map `_UNARY_OP_MAP` is considered invalid.
-    - Any errors propagated from parsing higher precedence terms, see `_parse_mul` and `_parse_exp`.
-    """
-    op_list: list[OperatorToken] = []
-    while tokens:
-        token = tokens[0]
-        if isinstance(token, UnknownToken):
-            _ = tokens.popleft()
-            return Err([UnexpectedTokenError(token, expected="expression")])
-        if not isinstance(token, OperatorToken):
-            value = _parse_mul(tokens)
-            if isinstance(value, Err):
-                return value
-            break
-        if token.op_type not in _UNARY_OP_MAP:
-            return Err([InvalidUnaryError(token)])
-        _ = tokens.popleft()
-        op_list.append(token)
-    else:
-        return Err([ExpectedPrimaryError()])
-
-    if not op_list:
-        return value
-
-    value = value.unwrap()
-    while op_list:
-        op = op_list.pop()
-        value = Unary(op.op_type, value, op.start)
-    return Ok(value)
-
-
-def _parse_primary(
-    tokens: deque[Token],
-) -> Result[Expression, list[ParsingError]]:
-    """
-    Parses a:
-    - `Group`: any expression in parenthesis, brackets or braces gets parsed recursively.
-    - `Float`: a floating point number.
-    - `Unit`: a string/identifier, units.
-    - "Primary chain": Series of Floats and Units which get parsed with implicit binary operations.
-        - See `_parse_primary_chain` for details.
-
-    Errors
-    ------
-    - `ExpectedPrimaryError`
-        - We reached the end of the token stream, but we're expecting a primary or a group term.
-        - Returned from `_parse_primary_chain` in some cases.
-    - `UnmatchedParenError`
-        - See `_parse_group`.
-    - `UnexpectedPrimaryError`, `InvalidUnitError`
-        - See `_parse_primary_chain`.
-    """
-    if not tokens:
-        return Err([ExpectedPrimaryError()])
-
-    return _parse_primary_chain(tokens)
-
-
-def _parse_group(
-    tokens: deque[Token],
-    opening_pair: ParenToken,
-) -> Result[Group, list[ParsingError]]:
-    """
-    Parses a sequence of tokens surrounded by Paren tokens on the same level, handling nested groups as expected.
-    e.g.
-    ((5 + 3) + 7)
-    Gets turned into one big Group expression, with a smaller one inside.
-
-    Errors
-    ------
-    - Any error propagated from the inner expression.
-    - `UnmatchedParenError`
-        - Returned when the first paren is not an opening one, or when the opening paren isn't closed.
-    """
-    if not opening_pair.paren_type.is_opening():
-        return Err([UnmatchedParenError(opening_pair)])
-
-    group_tokens: deque[Token] = deque()
-    pairs_open = 1
-    while tokens:
-        token = tokens.popleft()
-        if isinstance(token, ParenToken):
-            if token.paren_type == opening_pair.paren_type:
-                pairs_open += 1
-            elif token.paren_type.is_pair(opening_pair.paren_type):
-                pairs_open -= 1
-        if pairs_open == 0:
-            break
-        group_tokens.append(token)
-    else:
-        return Err([UnmatchedParenError(opening_pair)])
-
-    closing_pair = token
-    if not group_tokens:
-        start = opening_pair.start
-        end = closing_pair.end
-        if start == end:
-            end += 1
-        return Err([EmptyGroupExpression(span=(start, end))])
-
-    # Since groups get parsed without any context of  the outer expression,
-    # they can raise errors EOL errors even when it's not actually the end of the expression.
-    # e.g.
-    # `(9 / ) + (4 * )`
-    #      ^        ^ No tokens left after the operators so they report EOL
-    # We solve this by changing every EOL to a span between the last token and paren
-    last_group_token = group_tokens[-1]
-    expr = _parse_expr(group_tokens)
-    if isinstance(expr, Err):
-        errors = expr.err()
-        start = last_group_token.end
-        end = closing_pair.start
-        if end == start:
-            end += 1
-        for err in errors:
-            if err.span == EOL:
-                err.span = (start, end)
-        return expr
-
-    return Ok(
-        Group(
-            expr.unwrap(),
-            opening_pair.paren_type,
-            opening_pair.start,
-            closing_pair.end,
-        )
-    )
-
-
-def _parse_primary_chain(
-    tokens: deque[Token],
-) -> Result[Binary | Primary | Group, list[ParsingError]]:
-    # TODO: DOCS.
-    # TODO: this code is fucking disgusting.
-
-    token = tokens[0]
-    if isinstance(token, ParenToken):
-        _ = tokens.popleft()
-        return _parse_group(tokens, token)
-
-    if not isinstance(token, (UnitToken, FloatToken)):
-        return Err([UnexpectedPrimaryError(token)])
-
-    error_group: list[ParsingError] = []
-    previous_number_error = False
-    previous_unit_error = False
-    # Any series of the same error gets ignored, because too many errors will be a wall of text in discord.
-
-    subexpressions: deque[Binary | Primary | Group] = deque()
-    curr_subexpr: Float | Unit | Binary | None = None
-    previous_token: FloatToken | UnitToken | None = None
-    previous_unit: Unit | Binary | None = None
-
-    while tokens:
-        token = tokens[0]
-        if isinstance(token, FloatToken):
-            number_res = _parse_primary_expression(Float, tokens)
-            if isinstance(number_res, Err):
-                error_group.extend(number_res.err())
-                curr_subexpr = None
-            else:
-                if curr_subexpr is not None:
-                    subexpressions.append(curr_subexpr)
-                curr_subexpr = number_res.ok()
-
-            if isinstance(previous_token, FloatToken):
-                if not previous_number_error:
-                    message = "Expected operator or unit between numbers."
-                    start = previous_token.end
-                    end = token.start
-                    error_group.append(
-                        ExpectedPrimaryError(message=message, span=(start, end))
-                    )
-                previous_number_error = True
-                previous_token = token
-                continue
-
-        elif isinstance(token, UnitToken):
-            unit_res = _parse_primary_expression(Unit, tokens)
-            if isinstance(unit_res, Err):
-                error_group.extend(unit_res.err())
-                curr_subexpr = None
-                previous_unit = None
-                previous_token = token
-                continue
-            unit = unit_res.ok()
-
-            if (
-                isinstance(previous_token, UnitToken)
-                and previous_unit is not None
-                and previous_unit.dimensionality() == unit.dimensionality()
-            ):
-                if not previous_unit_error:
-                    message = "Expected a number between units of same dimensionality."
-                    start = previous_unit.end()
-                    end = unit.start()
-                    error_group.append(
-                        ExpectedPrimaryError(message=message, span=(start, end))
-                    )
-                previous_unit_error = True
-                previous_unit = unit
-                previous_token = token
-                continue
-
-            if curr_subexpr is None:
-                curr_subexpr = unit
-            else:
-                curr_subexpr = Binary(
-                    curr_subexpr, OperatorType.MUL, unit, implicit=True
-                )
-
-            previous_unit = unit
-
-        else:
-            break
-
-        previous_token = token
-        previous_number_error = False
-        previous_unit_error = False
-
-    if curr_subexpr is not None:
-        subexpressions.append(curr_subexpr)
-
-    if error_group:
-        return Err(error_group)
-
-    while len(subexpressions) > 1:
-        left = subexpressions.popleft()
-        right = subexpressions.popleft()
-        if left.dimensionality() == right.dimensionality():
-            op = OperatorType.ADD
-        else:
-            op = OperatorType.MUL
-        new_expr = Binary.try_new(left, op, right, implicit=True).unwrap()
-        subexpressions.appendleft(new_expr)
-    return Ok(subexpressions[0])
-
-
-def _parse_primary_expression[T: (Float, Unit)](
-    primary: type[T],
-    tokens: deque[Token],
-    exp: bool = False,
-) -> Result[T | Binary, list[ParsingError]]:
-    """
-    Parses simple or complex float or unit expressions, such as "1", "1/2", "N / m**2", or "1 / 4**(2+3)".
-
-    NOTE: implicit multiplication of units is not handled here,
-    the input "N m" only returns the Unit "N", but "m" stays in `tokens`.
-
-    Errors
-    ------
-    - `UndefinedUnitError`
-        - All units which aren't defined in the registry are reported.
-    - `ExpectedPrimaryError`
-        - Returned when we run into a unit as an exponent. This would raise a pint.DimensionalityError when trying to evalute.
-    - `DivisionByZeroError`
-        - Returned when dividing by 0.
-        - NOTE: the right operand must be exactly 0, it can not be e.g. "x / (1-1)."
-    """
-    error_group: list[ParsingError] = []
-
-    first = tokens[0]
-    assert isinstance(first, primary.token_type)
-    token_type = type(first)
-
-    if exp:
-        ops = (OperatorType.EXP,)
-        res = primary.from_token(first)
-        _ = tokens.popleft()
-        if isinstance(res, Err):
-            error_group.append(res.err())
-            # Type hint to avoid LSP complaints because `list` is invariant
-            errors: list[ParsingError] = [res.err()]
-            term = Err(errors)
-        else:
-            term = res
-    else:
-        ops = (OperatorType.DIV,)
-        term = _parse_primary_expression(primary, tokens, exp=True)
+        term = parse_term(tokens)
         if isinstance(term, Err):
             error_group.extend(term.err())
 
-    while len(tokens) > 1:
-        op = tokens[0]
-        right_token = tokens[1]
-        if not isinstance(op, OperatorToken) or op.op_type not in ops:
-            break
-        if not isinstance(right_token, (FloatToken, UnitToken, ParenToken)):
-            break
-        if exp:
-            _ = tokens.popleft()
-            _ = tokens.popleft()
-            if isinstance(right_token, UnitToken):
-                message = f"Expected a number or dimensionless group as an exponent, got unit '{right_token.token}'."
-                error_group.append(
-                    ExpectedPrimaryError(message=message, span=right_token.span())
-                )
-                continue
-            elif isinstance(right_token, FloatToken):
-                right = Float(right_token.to_float(), *right_token.span())
+        while tokens:
+            token = tokens[0]
+            op_type = None
+            if isinstance(token, UnknownToken):
+                expected = "operator or group expression"
+                error_group.append(UnexpectedTokenError(token, expected=expected))
+                _ = tokens.popleft()
+            elif isinstance(token, OperatorToken):
+                if token.op_type not in ops:
+                    break
+                op_type = token.op_type
+                _ = tokens.popleft()
+            # Implicit multiplication
+            elif OperatorType.MUL in ops:
+                op_type = OperatorType.MUL
             else:
-                right_res = _parse_group(tokens, right_token)
+                break
+
+            right = parse_term(tokens)
+            if isinstance(right, Err):
+                error_group.extend(right.err())
+
+            elif op_type is not None:
+                right_val = right.ok()
+                if (
+                    isinstance(right_val, Float)
+                    and right_val.value == 0
+                    and op_type == OperatorType.DIV
+                ):
+                    error_group.append(DivisionByZeroError(right_val))
+                elif isinstance(term, Ok):
+                    match Binary.try_new(term.ok(), op_type, right_val):
+                        case Err(err) if isinstance(err, DimensionalityError):
+                            error_group.append(err)
+                        case res:
+                            term = Ok(
+                                res.expect(
+                                    "Can not be DivisionByZero because we check in the if above"
+                                )
+                            )
+
+        if error_group:
+            return Err(error_group)
+        return term
+
+    def _parse_sum(
+        self,
+        tokens: deque[Token],
+    ) -> Result[Expression, list[ParsingError]]:
+        return self._parse_binary(tokens, (OperatorType.ADD, OperatorType.SUB))
+
+    def _parse_mul(
+        self,
+        tokens: deque[Token],
+    ) -> Result[Expression, list[ParsingError]]:
+        return self._parse_binary(tokens, (OperatorType.MUL, OperatorType.DIV))
+
+    def _parse_exp(
+        self,
+        tokens: deque[Token],
+    ) -> Result[Expression, list[ParsingError]]:
+        return self._parse_binary(tokens, (OperatorType.EXP,))
+
+    def _parse_unary(
+        self,
+        tokens: deque[Token],
+    ) -> Result[Expression, list[ParsingError]]:
+        """
+        Parse a sequence of unary operations, the tree is created from the innermost operation.
+
+        Example
+        -------
+        - `+-3` turns into `Unary(ADD, Unary(SUB, Float(3)))`.
+
+        Errors
+        ------
+        - `InvalidUnaryError`
+            - Any operator not found in the unary operator map `_UNARY_OP_MAP` is considered invalid.
+        - Any errors propagated from parsing higher precedence terms, see `_parse_mul` and `_parse_exp`.
+        """
+        op_list: list[OperatorToken] = []
+        while tokens:
+            token = tokens[0]
+            if isinstance(token, UnknownToken):
+                _ = tokens.popleft()
+                return Err([UnexpectedTokenError(token, expected="expression")])
+            if not isinstance(token, OperatorToken):
+                value = self._parse_mul(tokens)
+                if isinstance(value, Err):
+                    return value
+                break
+            if token.op_type not in _UNARY_OP_MAP:
+                return Err([InvalidUnaryError(token)])
+            _ = tokens.popleft()
+            op_list.append(token)
+        else:
+            return Err([ExpectedPrimaryError()])
+
+        if not op_list:
+            return value
+
+        value = value.unwrap()
+        while op_list:
+            op = op_list.pop()
+            value = Unary(op.op_type, value, op.start)
+        return Ok(value)
+
+    def _parse_primary(
+        self,
+        tokens: deque[Token],
+    ) -> Result[Expression, list[ParsingError]]:
+        """
+        Parses a:
+        - `Group`: any expression in parenthesis, brackets or braces gets parsed recursively.
+        - `Float`: a floating point number.
+        - `Unit`: a string/identifier, units.
+        - "Primary chain": Series of Floats and Units which get parsed with implicit binary operations.
+            - See `_parse_primary_chain` for details.
+
+        Errors
+        ------
+        - `ExpectedPrimaryError`
+            - We reached the end of the token stream, but we're expecting a primary or a group term.
+            - Returned from `_parse_primary_chain` in some cases.
+        - `UnmatchedParenError`
+            - See `_parse_group`.
+        - `UnexpectedPrimaryError`, `InvalidUnitError`
+            - See `_parse_primary_chain`.
+        """
+        if not tokens:
+            return Err([ExpectedPrimaryError()])
+
+        return self._parse_primary_chain(tokens)
+
+    def _parse_group(
+        self,
+        tokens: deque[Token],
+        opening_pair: ParenToken,
+    ) -> Result[Group, list[ParsingError]]:
+        """
+        Parses a sequence of tokens surrounded by Paren tokens on the same level, handling nested groups as expected.
+        e.g.
+        ((5 + 3) + 7)
+        Gets turned into one big Group expression, with a smaller one inside.
+
+        Errors
+        ------
+        - Any error propagated from the inner expression.
+        - `UnmatchedParenError`
+            - Returned when the first paren is not an opening one, or when the opening paren isn't closed.
+        """
+        if not opening_pair.paren_type.is_opening():
+            return Err([UnmatchedParenError(opening_pair)])
+
+        group_tokens: deque[Token] = deque()
+        pairs_open = 1
+        while tokens:
+            token = tokens.popleft()
+            if isinstance(token, ParenToken):
+                if token.paren_type == opening_pair.paren_type:
+                    pairs_open += 1
+                elif token.paren_type.is_pair(opening_pair.paren_type):
+                    pairs_open -= 1
+            if pairs_open == 0:
+                break
+            group_tokens.append(token)
+        else:
+            return Err([UnmatchedParenError(opening_pair)])
+
+        closing_pair = token
+        if not group_tokens:
+            start = opening_pair.start
+            end = closing_pair.end
+            if start == end:
+                end += 1
+            return Err([EmptyGroupExpression(span=(start, end))])
+
+        # Since groups get parsed without any context of  the outer expression,
+        # they can raise errors EOL errors even when it's not actually the end of the expression.
+        # e.g.
+        # `(9 / ) + (4 * )`
+        #      ^        ^ No tokens left after the operators so they report EOL
+        # We solve this by changing every EOL to a span between the last token and paren
+        last_group_token = group_tokens[-1]
+        expr = self._parse_expr(group_tokens)
+        if isinstance(expr, Err):
+            errors = expr.err()
+            start = last_group_token.end
+            end = closing_pair.start
+            if end == start:
+                end += 1
+            for err in errors:
+                if err.span == EOL:
+                    err.span = (start, end)
+            return expr
+
+        return Ok(
+            Group(
+                expr.unwrap(),
+                opening_pair.paren_type,
+                opening_pair.start,
+                closing_pair.end,
+            )
+        )
+
+    def _parse_primary_chain(
+        self,
+        tokens: deque[Token],
+    ) -> Result[Binary | Primary | Group, list[ParsingError]]:
+        # TODO: DOCS.
+        # TODO: this code is fucking disgusting.
+
+        token = tokens[0]
+        if isinstance(token, ParenToken):
+            _ = tokens.popleft()
+            return self._parse_group(tokens, token)
+
+        if not isinstance(token, (UnitToken, FloatToken)):
+            return Err([UnexpectedPrimaryError(token)])
+
+        error_group: list[ParsingError] = []
+        previous_number_error = False
+        previous_unit_error = False
+        # Any series of the same error gets ignored, because too many errors will be a wall of text in discord.
+
+        subexpressions: deque[Binary | Primary | Group] = deque()
+        curr_subexpr: Float | Unit | Binary | None = None
+        previous_token: FloatToken | UnitToken | None = None
+        previous_unit: Unit | Binary | None = None
+
+        while tokens:
+            token = tokens[0]
+            if isinstance(token, FloatToken):
+                number_res = self._parse_primary_expression(Float, tokens)
+                if isinstance(number_res, Err):
+                    error_group.extend(number_res.err())
+                    curr_subexpr = None
+                else:
+                    if curr_subexpr is not None:
+                        subexpressions.append(curr_subexpr)
+                    curr_subexpr = number_res.ok()
+
+                if isinstance(previous_token, FloatToken):
+                    if not previous_number_error:
+                        message = "Expected operator or unit between numbers."
+                        start = previous_token.end
+                        end = token.start
+                        error_group.append(
+                            ExpectedPrimaryError(message=message, span=(start, end))
+                        )
+                    previous_number_error = True
+                    previous_token = token
+                    continue
+
+            elif isinstance(token, UnitToken):
+                unit_res = self._parse_primary_expression(Unit, tokens)
+                if isinstance(unit_res, Err):
+                    error_group.extend(unit_res.err())
+                    curr_subexpr = None
+                    previous_unit = None
+                    previous_token = token
+                    continue
+                unit = unit_res.ok()
+
+                if (
+                    isinstance(previous_token, UnitToken)
+                    and previous_unit is not None
+                    and previous_unit.dimensionality() == unit.dimensionality()
+                ):
+                    if not previous_unit_error:
+                        message = (
+                            "Expected a number between units of same dimensionality."
+                        )
+                        start = previous_unit.end()
+                        end = unit.start()
+                        error_group.append(
+                            ExpectedPrimaryError(message=message, span=(start, end))
+                        )
+                    previous_unit_error = True
+                    previous_unit = unit
+                    previous_token = token
+                    continue
+
+                if curr_subexpr is None:
+                    curr_subexpr = unit
+                else:
+                    curr_subexpr = Binary(
+                        curr_subexpr, OperatorType.MUL, unit, implicit=True
+                    )
+
+                previous_unit = unit
+
+            else:
+                break
+
+            previous_token = token
+            previous_number_error = False
+            previous_unit_error = False
+
+        if curr_subexpr is not None:
+            subexpressions.append(curr_subexpr)
+
+        if error_group:
+            return Err(error_group)
+
+        while len(subexpressions) > 1:
+            left = subexpressions.popleft()
+            right = subexpressions.popleft()
+            if left.dimensionality() == right.dimensionality():
+                op = OperatorType.ADD
+            else:
+                op = OperatorType.MUL
+            new_expr = Binary.try_new(left, op, right, implicit=True).unwrap()
+            subexpressions.appendleft(new_expr)
+        return Ok(subexpressions[0])
+
+    def _parse_primary_expression[T: (Float, Unit)](
+        self,
+        primary: type[T],
+        tokens: deque[Token],
+        exp: bool = False,
+    ) -> Result[T | Binary, list[ParsingError]]:
+        """
+        Parses simple or complex float or unit expressions, such as "1", "1/2", "N / m**2", or "1 / 4**(2+3)".
+
+        NOTE: implicit multiplication of units is not handled here,
+        the input "N m" only returns the Unit "N", but "m" stays in `tokens`.
+
+        Errors
+        ------
+        - `UndefinedUnitError`
+            - All units which aren't defined in the registry are reported.
+        - `ExpectedPrimaryError`
+            - Returned when we run into a unit as an exponent. This would raise a pint.DimensionalityError when trying to evalute.
+        - `DivisionByZeroError`
+            - Returned when dividing by 0.
+            - NOTE: the right operand must be exactly 0, it can not be e.g. "x / (1-1)."
+        """
+        error_group: list[ParsingError] = []
+
+        first = tokens[0]
+        assert isinstance(first, primary.token_type)
+        token_type = type(first)
+
+        if exp:
+            ops = (OperatorType.EXP,)
+            res = primary.from_token(first, self.ureg)
+            _ = tokens.popleft()
+            if isinstance(res, Err):
+                error_group.append(res.err())
+                # Type hint to avoid LSP complaints because `list` is invariant
+                errors: list[ParsingError] = [res.err()]
+                term = Err(errors)
+            else:
+                term = res
+        else:
+            ops = (OperatorType.DIV,)
+            term = self._parse_primary_expression(primary, tokens, exp=True)
+            if isinstance(term, Err):
+                error_group.extend(term.err())
+
+        while len(tokens) > 1:
+            op = tokens[0]
+            right_token = tokens[1]
+            if not isinstance(op, OperatorToken) or op.op_type not in ops:
+                break
+            if not isinstance(right_token, (FloatToken, UnitToken, ParenToken)):
+                break
+            if exp:
+                _ = tokens.popleft()
+                _ = tokens.popleft()
+                if isinstance(right_token, UnitToken):
+                    message = f"Expected a number or dimensionless group as an exponent, got unit '{right_token.token}'."
+                    error_group.append(
+                        ExpectedPrimaryError(message=message, span=right_token.span())
+                    )
+                    continue
+                elif isinstance(right_token, FloatToken):
+                    right = Float(right_token.to_float(), *right_token.span())
+                else:
+                    right_res = self._parse_group(tokens, right_token)
+                    if isinstance(right_res, Err):
+                        error_group.extend(right_res.err())
+                        continue
+                    right = right_res.ok()
+                    if right.is_unit():
+                        message = f"Expected a number as an exponent, got an expression with dimension '{right.dimensionality()}'."
+                        error_group.append(
+                            ExpectedPrimaryError(
+                                message=message, span=right_token.span()
+                            )
+                        )
+            else:
+                if not isinstance(right_token, token_type):
+                    break
+                # Pop operator only if we want to use it.
+                _ = tokens.popleft()
+                right_res = self._parse_primary_expression(primary, tokens, exp=True)
                 if isinstance(right_res, Err):
                     error_group.extend(right_res.err())
                     continue
                 right = right_res.ok()
-                if right.is_unit():
-                    message = f"Expected a number as an exponent, got an expression with dimension '{right.dimensionality()}'."
-                    error_group.append(
-                        ExpectedPrimaryError(message=message, span=right_token.span())
+            if (
+                isinstance(right, Float)
+                and right.value == 0
+                and op.op_type == OperatorType.DIV
+            ):
+                error_group.append(DivisionByZeroError(right))
+            elif isinstance(term, Ok):
+                term = Ok(
+                    Binary.try_new(term.ok(), op.op_type, right).expect(
+                        "This could only fail if it was an exponentation with a unit, or division by zero, both of which we check for above"
                     )
-        else:
-            if not isinstance(right_token, token_type):
-                break
-            # Pop operator only if we want to use it.
-            _ = tokens.popleft()
-            right_res = _parse_primary_expression(primary, tokens, exp=True)
-            if isinstance(right_res, Err):
-                error_group.extend(right_res.err())
-                continue
-            right = right_res.ok()
-        if (
-            isinstance(right, Float)
-            and right.value == 0
-            and op.op_type == OperatorType.DIV
-        ):
-            error_group.append(DivisionByZeroError(right))
-        elif isinstance(term, Ok):
-            term = Ok(
-                Binary.try_new(term.ok(), op.op_type, right).expect(
-                    "This could only fail if it was an exponentation with a unit, or division by zero, both of which we check for above"
                 )
-            )
 
-    if error_group:
-        return Err(error_group)
+        if error_group:
+            return Err(error_group)
 
-    # if isinstance(term, Ok):
-    #     print(primary, type(term.ok()))
-    return term
+        # if isinstance(term, Ok):
+        #     print(primary, type(term.ok()))
+        return term

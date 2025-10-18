@@ -1,10 +1,11 @@
 import pint
+from pint import UnitRegistry
 from pint.facets.plain import PlainQuantity
 from pint.util import UnitsContainer
 
 from result import Result, Ok, Err
 
-from absolute_unit import ureg, parsing
+from absolute_unit import parsing
 
 metric_to_imperial = {
     "kilometer": "mile",
@@ -53,6 +54,7 @@ class UnitInferError(UnitError):
 
 def infer_target_unit(
     quantity: PlainQuantity[float],
+    ureg: UnitRegistry,
 ) -> Result[UnitsContainer, UnitInferError]:
     """
     Attempt to automatically recognize which units the given quantity to should be converted to.
@@ -96,7 +98,10 @@ def infer_target_unit(
     return Ok(UnitsContainer(units))
 
 
-def get_target_unit(target: str) -> Result[UnitsContainer, InvalidUnitError]:
+def get_target_unit(
+    target: str,
+    ureg: UnitRegistry,
+) -> Result[UnitsContainer, InvalidUnitError]:
     try:
         unit_quantity = ureg.Quantity(target)
     except pint.errors.UndefinedUnitError as e:
@@ -107,7 +112,9 @@ def get_target_unit(target: str) -> Result[UnitsContainer, InvalidUnitError]:
 
 
 def has_different_currencies(
-    quantity: PlainQuantity[float], target: UnitsContainer
+    ureg: UnitRegistry,
+    quantity: PlainQuantity[float],
+    target: UnitsContainer,
 ) -> bool:
     q_units = UnitsContainer(quantity.unit_items())
     difference = set(q_units) ^ set(target)
@@ -116,8 +123,9 @@ def has_different_currencies(
     return "[currency]" in dim
 
 
-def parse_input(input: str) -> Result[parsing.Expression, str]:
-    parsing_result = parsing.parse(input)
+def parse_input(input: str, ureg: UnitRegistry) -> Result[parsing.Expression, str]:
+    parser = parsing.Parser(ureg)
+    parsing_result = parser.parse(input)
     if isinstance(parsing_result, Err):
         errors = parsing_result.err_value
         errors_formatted = parsing.format_errors(errors, len(input))
@@ -127,8 +135,9 @@ def parse_input(input: str) -> Result[parsing.Expression, str]:
 
 def evaluate_expression(
     expression: parsing.Expression,
+    ureg: UnitRegistry,
 ) -> Result[PlainQuantity[float], str]:
-    evaluation_result = expression.evaluate()
+    evaluation_result = expression.evaluate(ureg)
     if isinstance(evaluation_result, Err):
         errors = evaluation_result.err_value
         errors_formatted = parsing.format_errors(errors, expression.end())
@@ -137,7 +146,8 @@ def evaluate_expression(
 
 
 def convert(
-    quantity: PlainQuantity[float], target_unit: UnitsContainer
+    quantity: PlainQuantity[float],
+    target_unit: UnitsContainer,
 ) -> Result[PlainQuantity[float], ConversionError]:
     try:
         converted: PlainQuantity[float] = quantity.to(target_unit).to_reduced_units()  # pyright: ignore [reportUnknownVariableType, reportUnknownMemberType]

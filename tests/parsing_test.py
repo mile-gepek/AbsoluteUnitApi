@@ -4,7 +4,7 @@ from collections import deque
 
 from result import Err, Ok
 
-from pint import Quantity
+from pint import Quantity, UnitRegistry
 from absolute_unit.parsing import (
     Binary,
     CharStream,
@@ -29,13 +29,13 @@ from absolute_unit.parsing import (
     UnknownToken,
     UnmatchedParenError,
     Whitespace,
-    _parse_primary,
-    _parse_unary,
-    _parse_group,
-    _parse_primary_expression,
-    _parse_expr,
+    Parser,
     tokenize,
 )
+
+
+ureg = UnitRegistry()
+parser = Parser(ureg)
 
 
 def float_token(value: float) -> FloatToken:
@@ -214,7 +214,7 @@ def test_unary_parse() -> None:
             float_token(6.3),
         ]
     )
-    parsed = _parse_unary(tokens)
+    parsed = parser._parse_unary(tokens)
     mock_result = unary_mock(
         OperatorType.SUB,
         unary_mock(
@@ -237,7 +237,7 @@ def test_unary_invalid_unary_error() -> None:
             float_token(6.68),
         ]
     )
-    result = _parse_unary(tokens)
+    result = parser._parse_unary(tokens)
     assert isinstance(result, Err)
     errors = result.err()
     assert isinstance(errors[0], InvalidUnaryError)
@@ -260,7 +260,7 @@ def test_binary_parse() -> None:
             float_token(3.6),
         ]
     )
-    parsed = _parse_expr(tokens)
+    parsed = parser._parse_expr(tokens)
     mock_result = Binary(
         float_mock(4.5),
         OperatorType.ADD,
@@ -279,7 +279,7 @@ def test_parse_binary_division_by_zero() -> None:
             float_token(0),
         ]
     )
-    result = _parse_expr(tokens)
+    result = parser._parse_expr(tokens)
     assert isinstance(result, Err)
     assert isinstance(result.err()[0], DivisionByZeroError)
 
@@ -300,7 +300,7 @@ def test_parse_binary_multiple_errors() -> None:
             right_paren,
         ]
     )
-    parsed = _parse_expr(tokens)
+    parsed = parser._parse_expr(tokens)
     assert isinstance(parsed, Err)
     errors = parsed.err()
     assert len(errors) == 2
@@ -310,7 +310,7 @@ def test_parse_binary_multiple_errors() -> None:
 
 def test_primary_unknown_primary_error() -> None:
     tokens: deque[Token] = deque([op_mul])
-    result = _parse_primary(tokens)
+    result = parser._parse_primary(tokens)
     assert isinstance(result, Err)
     errors = result.err()
     assert isinstance(errors[0], UnexpectedPrimaryError)
@@ -326,7 +326,7 @@ def test_parse_group() -> None:
             right_paren,
         ]
     )
-    parsed = _parse_group(tokens, tokens.popleft())  # pyright: ignore[reportArgumentType]
+    parsed = parser._parse_group(tokens, tokens.popleft())  # pyright: ignore[reportArgumentType]
     mock_result = float_mock(6.68)
     assert isinstance(parsed, Ok)
     assert parsed.ok() == mock_result
@@ -335,7 +335,7 @@ def test_parse_group() -> None:
 
 def test_parse_group_unmatched_closing_paren_error() -> None:
     tokens: deque[Token] = deque(tokenize(")(())"))
-    result = _parse_primary(tokens)
+    result = parser._parse_primary(tokens)
     assert isinstance(result, Err)
     errors = result.err()
     assert isinstance(errors[0], UnmatchedParenError)
@@ -348,7 +348,7 @@ def test_parse_group_unmatched_opening_paren_error() -> None:
             unit_token("m"),
         ]
     )
-    result = _parse_primary(tokens)
+    result = parser._parse_primary(tokens)
     assert isinstance(result, Err)
     errors = result.err()
     assert isinstance(errors[0], UnmatchedParenError)
@@ -357,7 +357,7 @@ def test_parse_group_unmatched_opening_paren_error() -> None:
 
 def test_parse_float_standalone() -> None:
     tokens: deque[Token] = deque([float_token(3)])
-    parsed = _parse_primary_expression(Float, tokens)
+    parsed = parser._parse_primary_expression(Float, tokens)
     mock_result = float_mock(3)
     assert isinstance(parsed, Ok)
     assert parsed.ok() == mock_result
@@ -365,7 +365,7 @@ def test_parse_float_standalone() -> None:
 
 def test_parse_unit_standalone() -> None:
     tokens: deque[Token] = deque([unit_token("km")])
-    parsed = _parse_primary_expression(Unit, tokens)
+    parsed = parser._parse_primary_expression(Unit, tokens)
     mock_result = unit_mock("km")
     assert isinstance(parsed, Ok)
     assert parsed.ok() == mock_result
@@ -379,7 +379,7 @@ def test_parse_unit_standalone_leftover() -> None:
             unit_token("m"),
         ]
     )
-    parsed = _parse_primary_expression(Unit, tokens)
+    parsed = parser._parse_primary_expression(Unit, tokens)
     assert isinstance(parsed, Ok)
     mock_result = unit_mock("N")
     assert parsed.ok() == mock_result
@@ -387,7 +387,7 @@ def test_parse_unit_standalone_leftover() -> None:
 
 
 def test_parse_unit_invalid_unit_simple() -> None:
-    result = Unit.try_new(unit_token("dfdasf"))
+    result = Unit.try_new(unit_token("dfdasf"), ureg)
     assert isinstance(result, Err)
     assert isinstance(result.err(), UndefinedUnitError)
 
@@ -400,7 +400,7 @@ def test_parse_unit_invalid_unit_complex() -> None:
             unit_token("def"),
         ]
     )
-    result = _parse_primary_expression(Unit, tokens)
+    result = parser._parse_primary_expression(Unit, tokens)
     assert isinstance(result, Err)
     errors = result.err()
     assert isinstance(errors[0], UndefinedUnitError)
@@ -415,7 +415,7 @@ def test_parse_float_power_float() -> None:
             float_token(2),
         ]
     )
-    parsed = _parse_primary_expression(Float, tokens)
+    parsed = parser._parse_primary_expression(Float, tokens)
     assert isinstance(parsed, Ok)
     mock_result = Binary(
         float_mock(4),
@@ -434,7 +434,7 @@ def test_parse_unit_power_float() -> None:
             float_token(2),
         ]
     )
-    parsed = _parse_primary_expression(Unit, tokens)
+    parsed = parser._parse_primary_expression(Unit, tokens)
     assert isinstance(parsed, Ok)
     mock_result = Binary(
         unit_mock("km"),
@@ -453,7 +453,7 @@ def test_parse_unit_power_error() -> None:
             unit_token("km"),
         ]
     )
-    result = _parse_primary_expression(Unit, tokens)
+    result = parser._parse_primary_expression(Unit, tokens)
     assert isinstance(result, Err)
     errors = result.err()
     assert isinstance(errors[0], ExpectedPrimaryError)
@@ -472,7 +472,7 @@ def test_parse_unit_power_groupexpr() -> None:
             right_paren,
         ]
     )
-    parsed = _parse_primary_expression(Unit, tokens)
+    parsed = parser._parse_primary_expression(Unit, tokens)
     assert isinstance(parsed, Ok)
     # mock_result: km ** (1 + 1)
     mock_result = Binary(
@@ -502,7 +502,7 @@ def test_primary_chain_simple() -> None:
             unit_token("h"),
         ]
     )
-    parsed = _parse_expr(tokens)
+    parsed = parser._parse_expr(tokens)
     mock_result = Binary(
         Binary(
             float_mock(30),
@@ -540,7 +540,7 @@ def test_primary_chain_complex() -> None:
             unit_token("min"),
         ]
     )
-    parsed = _parse_expr(tokens)
+    parsed = parser._parse_expr(tokens)
     mock_result = Binary(
         Binary(
             Binary(
@@ -595,7 +595,7 @@ def test_primary_chain_order() -> None:
             float_token(2),
         ]
     )
-    result = _parse_expr(tokens)
+    result = parser._parse_expr(tokens)
     assert isinstance(result, Ok)
     mock_result = Binary(
         Binary(
@@ -627,7 +627,7 @@ def test_primary_chain_format_error() -> None:
             unit_token("m"),
         ]
     )
-    result = _parse_primary(tokens)
+    result = parser._parse_primary(tokens)
     assert isinstance(result, Err)
     errors = result.err()
     error_0 = errors[0]

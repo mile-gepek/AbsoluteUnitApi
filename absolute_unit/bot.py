@@ -5,21 +5,24 @@ from typing import Self
 import disnake
 from disnake.ext import commands
 from disnake.ext.commands import InteractionBot
+from pint import UnitRegistry
 from pint.facets.plain import PlainQuantity
 from result import Err
 
-from absolute_unit import conversion
+from absolute_unit import conversion, currencies
 from absolute_unit.config import Config
-from absolute_unit import ureg, currencies
 
 
 logger = logging.getLogger(__name__)
 
 
 class Bot:
-    def __init__(self, config: Config, client: InteractionBot) -> None:
+    def __init__(
+        self, config: Config, client: InteractionBot, ureg: UnitRegistry
+    ) -> None:
         self.config: Config = config
         self.client: InteractionBot = client
+        self.ureg: UnitRegistry = ureg
 
         if config.test_guilds is None:
             logger.info("No test guilds specified, commands will be synced globally.")
@@ -43,7 +46,8 @@ class Bot:
     def default(cls) -> Self:
         config = Config.get_config().unwrap()
         client = InteractionBot(test_guilds=config.test_guilds)
-        return cls(config, client)
+        ureg = UnitRegistry()
+        return cls(config, client, ureg)
 
     def run(self) -> None:
         self.client.run(self.config.bot_token)
@@ -76,11 +80,11 @@ class ConversionCog(commands.Cog):
             Print the intepretation of the parsed expression. Use this if output is unexpected.
         """
         # TODO: maybe clean this up by raising all errors, so the slash_command_error event can handle them
-        expression_result = conversion.parse_input(input)
+        expression_result = conversion.parse_input(input, self.bot.ureg)
         if isinstance(expression_result, Err):
             error_message = f"```\n{input}\n{expression_result.err()}\n```"
             if target is not None:
-                target_unit_result = conversion.get_target_unit(target)
+                target_unit_result = conversion.get_target_unit(target, self.bot.ureg)
                 if isinstance(target_unit_result, Err):
                     error = target_unit_result.err()
                     error_message += f"Target unit errors:```\n{error}\n```"
@@ -93,11 +97,11 @@ class ConversionCog(commands.Cog):
         if verbose:
             output = f"```\n{input}\n```interpreting as\n```\n{expression}\n```\n"
 
-        evaluation_result = conversion.evaluate_expression(expression)
+        evaluation_result = conversion.evaluate_expression(expression, self.bot.ureg)
         if isinstance(evaluation_result, Err):
             error_message = f"```\n{input}\n{evaluation_result.err()}\n```"
             if target is not None:
-                target_unit_result = conversion.get_target_unit(target)
+                target_unit_result = conversion.get_target_unit(target, self.bot.ureg)
                 if isinstance(target_unit_result, Err):
                     error = target_unit_result.err()
                     error_message += f"Target unit errors:```\n{error}\n```"
@@ -108,9 +112,9 @@ class ConversionCog(commands.Cog):
         evaluated: PlainQuantity[float] = evaluation_result.ok().to_reduced_units()  # pyright: ignore [reportUnknownVariableType, reportUnknownMemberType]
 
         if target is None:
-            target_unit_result = conversion.infer_target_unit(evaluated)
+            target_unit_result = conversion.infer_target_unit(evaluated, self.bot.ureg)
         else:
-            target_unit_result = conversion.get_target_unit(target)
+            target_unit_result = conversion.get_target_unit(target, self.bot.ureg)
 
         if isinstance(target_unit_result, Err):
             error = target_unit_result.err()
@@ -120,7 +124,11 @@ class ConversionCog(commands.Cog):
             )
         target_unit = target_unit_result.ok()
 
-        has_currency = conversion.has_different_currencies(evaluated, target_unit)
+        has_currency = conversion.has_different_currencies(
+            self.bot.ureg,
+            evaluated,
+            target_unit,
+        )
 
         conversion_result = conversion.convert(evaluated, target_unit)
         if isinstance(conversion_result, Err):
@@ -131,15 +139,15 @@ class ConversionCog(commands.Cog):
         converted = conversion_result.ok()
 
         # TODO: move allodis to a bigh "post-process" function
-        if converted.units == ureg.foot:
+        if converted.units == self.bot.ureg.foot:
             magnitude = converted.magnitude
             whole = int(magnitude)
-            quantity_foot = whole * ureg.foot  # pyright: ignore[reportUnknownVariableType]
+            quantity_foot = whole * self.bot.ureg.foot  # pyright: ignore[reportUnknownVariableType]
             decimal = magnitude - whole
-            quantity_inch = decimal * 12 * ureg.inch  # pyright: ignore[reportUnknownVariableType]
+            quantity_inch = decimal * 12 * self.bot.ureg.inch  # pyright: ignore[reportUnknownVariableType]
             converted_str = f"{quantity_foot:~P} {quantity_inch:.3g~P}"
         else:
-            if converted.units == ureg.kph:
+            if converted.units == self.bot.ureg.kph:
                 converted = converted.to("km/h")  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
             converted_str = f"{converted:.3g~P}"
 

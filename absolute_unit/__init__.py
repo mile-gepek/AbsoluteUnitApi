@@ -1,7 +1,5 @@
 import logging
 
-from pint import UnitRegistry
-
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -19,6 +17,3 @@ handler.setFormatter(
 )
 disnake_logger.addHandler(handler)
 _ = logging.getLogger(__name__)
-
-
-ureg = UnitRegistry()

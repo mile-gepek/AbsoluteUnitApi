@@ -1,19 +1,19 @@
+from pint import UnitRegistry
 from pint.util import UnitsContainer
 import pytest
 from result import Err, Ok
 
-from absolute_unit import ureg
 
 from absolute_unit.conversion import (
-    ConversionError,
     DimensionalityError,
     metric_to_imperial,
     imperial_to_metric,
     infer_target_unit,
     convert,
-    UnitError,
     UnitInferError,
 )
+
+ureg = UnitRegistry()
 
 
 def str_to_units_container(units: str) -> UnitsContainer:
@@ -25,7 +25,7 @@ def str_to_units_container(units: str) -> UnitsContainer:
 @pytest.mark.parametrize("metric, imperial", list(metric_to_imperial.items()))
 def test_infer_target_unit_metric_to_imperial(metric: str, imperial: str):
     qty = ureg(metric)
-    result = infer_target_unit(qty)
+    result = infer_target_unit(qty, ureg)
 
     assert isinstance(result, Ok)
     units = result.ok()
@@ -35,7 +35,7 @@ def test_infer_target_unit_metric_to_imperial(metric: str, imperial: str):
 @pytest.mark.parametrize("imperial, metric", list(imperial_to_metric.items()))
 def test_infer_target_unit_imperial_to_metric(imperial: str, metric: str):
     qty = ureg(imperial)
-    result = infer_target_unit(qty)
+    result = infer_target_unit(qty, ureg)
 
     assert isinstance(result, Ok)
     units = result.ok()
@@ -44,7 +44,7 @@ def test_infer_target_unit_imperial_to_metric(imperial: str, metric: str):
 
 def test_infer_target_unit_mixed_metric_and_imperial_length():
     qty = ureg("5 mile") / ureg("2 meter")
-    result = infer_target_unit(qty)
+    result = infer_target_unit(qty, ureg)
 
     assert isinstance(result, Err)
     assert isinstance(result.err(), UnitInferError)
@@ -52,7 +52,7 @@ def test_infer_target_unit_mixed_metric_and_imperial_length():
 
 def test_infer_target_unit_mixed_metric_and_imperial_weight():
     qty = ureg("kg") * ureg("lbs")
-    result = infer_target_unit(qty)
+    result = infer_target_unit(qty, ureg)
 
     assert isinstance(result, Err)
     assert isinstance(result.err(), UnitInferError)
@@ -60,7 +60,7 @@ def test_infer_target_unit_mixed_metric_and_imperial_weight():
 
 def test_infer_target_unit_mixed_metric_and_imperial_speed():
     qty = ureg("mph") * ureg("meter")
-    result = infer_target_unit(qty)
+    result = infer_target_unit(qty, ureg)
 
     assert isinstance(result, Err)
     assert isinstance(result.err(), UnitInferError)
