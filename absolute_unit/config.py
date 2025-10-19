@@ -38,7 +38,7 @@ class Config(BaseModel):
     # cooldown length in seconds
     cooldown_duration: float = 5
 
-    path: Path = Field(exclude=True)
+    path: Path = Field(Path("config.toml"), exclude=True)
 
     @property
     def testing_mode(self) -> bool:
@@ -49,7 +49,7 @@ class Config(BaseModel):
         """
         Returns the default config.
         """
-        return Ok(cls.model_validate({"path": Path("config.toml")}))
+        return Ok(cls.model_validate({}))
 
     @classmethod
     def _create_config(
