@@ -66,10 +66,10 @@ Configuration is done through a `.env` file for secrets, and a `config.toml` fil
 
 | Key | Description | Optional | Default |
 | :-- | :-- | :-:  | :-: |
-| test-guild-ids | The list of guilds to register commands to when testing. | Yes | `[]` |
+| test_guild_ids | The list of guilds to register commands to when testing. | Yes | `[]` |
 | mod_role_ids | A list of mod role ids.<br>Anyone with a mod role bypasses cooldowns | Yes | `[]` |
 | admin_role_ids | A list of admin role ids.<br>Anyone with an admin role bypasses cooldowns, and can change configuration through commands. | Yes | `[]` |
-| cooldown-duration | A float representing cooldown duration in seconds. | Yes | `5` |
+| cooldown_duration | A float representing cooldown duration in seconds. | Yes | `5` |
 
 Example config:
 ```toml
