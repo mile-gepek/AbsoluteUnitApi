@@ -1,6 +1,6 @@
 import logging
 import traceback
-from typing import Self
+from typing import Callable, Self
 
 import disnake
 from disnake.ext import commands
@@ -36,7 +36,7 @@ class Bot(commands.InteractionBot):
         self.currency_cog: currencies.CurrencyCog | None = None
         currency_api_token = settings.currency_api_token
         if currency_api_token is None:
-            logging.info(
+            logger.info(
                 "currencyapi token not found in config, currency conversion will be disabled."
             )
         else:
@@ -53,6 +53,24 @@ class Bot(commands.InteractionBot):
         return cls(settings, config, client, ureg)
 
 
+def is_admin[T]() -> Callable[[T], T]:
+    async def predicate(
+        interaction: disnake.ApplicationCommandInteraction[Bot],
+    ) -> bool:
+        admin_role_ids = interaction.bot.config.admin_role_ids
+        if isinstance(interaction.author, disnake.User):
+            return True
+        author_roles: disnake.utils.SnowflakeList = interaction.author._roles  # pyright: ignore[reportPrivateUsage]
+        has_admin_role = any(author_roles.has(role) for role in admin_role_ids)
+        if not has_admin_role:
+            await interaction.send(
+                "Only admins can change or view the cooldown.", ephemeral=True
+            )
+        return has_admin_role
+
+    return commands.app_check(predicate)  # pyright: ignore[reportUnknownMemberType]
+
+
 def cooldown_check(
     interaction: disnake.GuildCommandInteraction[Bot],
 ) -> commands.Cooldown | None:
@@ -60,11 +78,11 @@ def cooldown_check(
     if config.testing_mode:
         return None
 
-    author = interaction.author
-    skip_roles = config.admin_role_ids + config.mod_role_ids
     # Member.roles seems to be bugged.
     # Raises `AttributeError: 'Object' object has no attribute 'get_role'`.
-    if any(role in skip_roles for role in author._roles):  # pyright: ignore[reportUnknownVariableType, reportPrivateUsage]
+    author_roles = interaction.author._roles  # pyright: ignore[reportPrivateUsage]
+    skip_roles = config.admin_role_ids + config.mod_role_ids
+    if any(author_roles.has(role) for role in skip_roles):
         return None
 
     return commands.Cooldown(1, config.cooldown_duration)
@@ -186,12 +204,45 @@ class ConversionCog(commands.Cog):
         ephemeral = verbose and self.bot.config.test_guild_ids is None
         await interaction.send(output, ephemeral=ephemeral)
 
+    @is_admin()
+    @commands.slash_command()
+    async def cooldown(
+        self,
+        interaction: disnake.ApplicationCommandInteraction[commands.InteractionBot],
+        cooldown: commands.Range[float, 0, ...] | None = None,
+    ) -> None:
+        """
+        Get or set the cooldown for the `convert` command.
+
+        Parameters
+        ----------
+        cooldown:
+            Positive number of seconds to set the cooldown duration to.
+        """
+        if cooldown is None:
+            await interaction.send(
+                f"Cooldown is set to {self.bot.config.cooldown_duration:.2f} seconds.",
+                ephemeral=True,
+            )
+            return
+
+        self.bot.config.cooldown_duration = cooldown
+        self.bot.config.write()
+        THRESHOLD: float = 10
+        message = f"Cooldown set to {cooldown}."
+        if cooldown > THRESHOLD:
+            message += f"\n-# Cooldown higher than {THRESHOLD:.2f} seconds, is this intentional?"
+        await interaction.send(message, ephemeral=True)
+
     @commands.Cog.listener()
     async def on_slash_command_error(
         self,
         interaction: disnake.ApplicationCommandInteraction[commands.InteractionBot],
-        error: commands.CommandInvokeError,
+        error: commands.CommandError,
     ) -> None:
+        if isinstance(error, commands.CheckFailure):
+            return
+
         # For some reason on_slash_command_error gets triggered on cooldowns even though CommandOnCooldown is not a subclass of CommandInvokeError
         if isinstance(error, commands.CommandOnCooldown):
             await interaction.send(
@@ -200,10 +251,13 @@ class ConversionCog(commands.Cog):
             )
             return
 
-        logging.error(
+        logger.error(
             f"Error when attempting command '{interaction.application_command.name}': \"{error}\""
         )
         traceback.print_exception(error)
+
+        if not isinstance(error, commands.CommandInvokeError):
+            return
 
         original = error.original
         original_type_name = type(original).__name__
@@ -216,4 +270,4 @@ class ConversionCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self) -> None:
-        print(f"Logged in as {self.bot.user} (ID: {self.bot.user.id})\n")
+        logger.info(f"Logged in as {self.bot.user} (ID: {self.bot.user.id})\n")
