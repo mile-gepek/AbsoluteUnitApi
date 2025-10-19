@@ -1,10 +1,9 @@
 import logging
 import traceback
-from typing import Callable, Self
+from typing import Self
 
 import disnake
 from disnake.ext import commands
-from disnake.ext.commands import BucketType, Cooldown, InteractionBot, dynamic_cooldown
 from pint import UnitRegistry
 from pint.facets.plain import PlainQuantity
 from result import Err
@@ -18,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class Bot(commands.InteractionBot):
     def __init__(
-        self, config: Config, client: InteractionBot, ureg: UnitRegistry
+        self, config: Config, client: commands.InteractionBot, ureg: UnitRegistry
     ) -> None:
         super().__init__(test_guilds=config.test_guilds)
         self.config: Config = config
@@ -43,7 +42,7 @@ class Bot(commands.InteractionBot):
     @classmethod
     def default(cls) -> Self:
         config = Config.get_config().unwrap()
-        client = InteractionBot(test_guilds=config.test_guilds)
+        client = commands.InteractionBot(test_guilds=config.test_guilds)
         ureg = UnitRegistry()
         return cls(config, client, ureg)
 
@@ -62,7 +61,7 @@ class ConversionCog(commands.Cog):
 
     # disnake's typing on dynamic_cooldown requires the check's argument to be Message,
     # but it allows (and should be typed to allow) interactions
-    @dynamic_cooldown(cooldown_check, BucketType.member)  # pyright: ignore[reportArgumentType]
+    @commands.dynamic_cooldown(cooldown_check, commands.BucketType.member)  # pyright: ignore[reportArgumentType]
     @commands.slash_command()
     async def convert(
         self,
