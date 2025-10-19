@@ -57,8 +57,8 @@ def cooldown_check(
     interaction: disnake.GuildCommandInteraction[Bot],
 ) -> commands.Cooldown | None:
     config = interaction.bot.config
-    # if config.testing_mode:
-    #     return None
+    if config.testing_mode:
+        return None
 
     author = interaction.author
     skip_roles = config.admin_role_ids + config.mod_role_ids
