@@ -54,17 +54,20 @@ class Bot(commands.InteractionBot):
 
 
 def cooldown_check(
-    interaction: disnake.ApplicationCommandInteraction[Bot],
+    interaction: disnake.GuildCommandInteraction[Bot],
 ) -> commands.Cooldown | None:
     config = interaction.bot.config
-    user_id = interaction.user.id
-    if (
-        config.testing_mode
-        or user_id in config.admin_role_ids
-        or user_id in config.mod_role_ids
-    ):
+    # if config.testing_mode:
+    #     return None
+
+    author = interaction.author
+    skip_roles = config.admin_role_ids + config.mod_role_ids
+    # Member.roles seems to be bugged.
+    # Raises `AttributeError: 'Object' object has no attribute 'get_role'`.
+    if any(role in skip_roles for role in author._roles):  # pyright: ignore[reportUnknownVariableType, reportPrivateUsage]
         return None
-    return commands.Cooldown(1, 5)
+
+    return commands.Cooldown(1, config.cooldown_duration)
 
 
 class ConversionCog(commands.Cog):
