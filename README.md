@@ -54,16 +54,28 @@ python -m absolute_unit
 
 
 ## Configuration
-Configuration is currently done only through a `.env` file at the root directory, with the following keys:
-```
-DISCORD_APPLICATION_TOKEN `str`
-    - The token for the discord bot.
+Configuration is done through a `.env` file for secrets, and a `config.toml` file for general configuration.
 
-CURRENCYAPI_TOKEN `Optional str`
-    - The token for currencyapi.
-    - Currency conversion will be disabled if this token is not found.
+### .env
+| Key | Description | Optional |
+| :-- | :-- | :-:  |
+| BOT_TOKEN | The discord bot token. | No |
+| CURRENCY_API_TOKEN | The currencyapi token.<br>Currency conversion will be disabled if the token is not found. | Yes |
 
-TEST_GUILD_ID: `Optional int`
-    - ID of the guild used for testing.
-    - The test guild ID will enable testing mode, which disables ephemeral errors, except for command cooldowns.
+### config.toml
+
+| Key | Description | Optional | Default |
+| :-- | :-- | :-:  | :-: |
+| test-guild-ids | The list of guilds to register commands to when testing. | Yes | `[]` |
+| mod_role_ids | A list of mod role ids.<br>Anyone with a mod role bypasses cooldowns | Yes | `[]` |
+| admin_role_ids | A list of admin role ids.<br>Anyone with an admin role bypasses cooldowns, and can change configuration through commands. | Yes | `[]` |
+| cooldown-duration | A float representing cooldown duration in seconds. | Yes | `5` |
+
+Example config:
+```toml
+test-guild-ids = [123456789012345678]
+
+admin_role_ids = [123456789012345678]
+
+cooldown-duration = 6.7
 ```

@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any, ClassVar, Self
 
 import tomlkit
-from pydantic import BaseModel, Field, ValidationError
+import pydantic
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from result import Err, Ok, Result
 
@@ -29,7 +30,13 @@ class Settings(BaseSettings):
             return Err(validation_error)
 
 
+def to_kebab(snake: str) -> str:
+    return snake.replace("_", "-")
+
+
 class Config(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(alias_generator=to_kebab)
+
     test_guild_ids: list[int] | None = None
 
     mod_role_ids: list[int] = []
