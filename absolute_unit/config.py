@@ -7,8 +7,7 @@ from pathlib import Path
 from typing import Any, ClassVar, Self
 
 import tomlkit
-import pydantic
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from result import Err, Ok, Result
 
@@ -30,16 +29,10 @@ class Settings(BaseSettings):
             return Err(validation_error)
 
 
-def to_kebab(snake: str) -> str:
-    return snake.replace("_", "-")
-
-
 class Config(BaseModel):
-    model_config: ClassVar[ConfigDict] = ConfigDict(alias_generator=to_kebab)
-
     test_guild_ids: list[int] | None = None
 
-    mod_role_ids: list[int] = []
+    mod_role_ids: list[int] = Field([])
     admin_role_ids: list[int] = []
 
     # cooldown length in seconds
@@ -84,6 +77,9 @@ class Config(BaseModel):
         return cls._create_config(path, data)
 
     def write(self) -> None:
-        data = self.model_dump()
+        data = self.model_dump(
+            exclude_none=True,
+            exclude_unset=True,
+        )
         with self.path.open("w") as config_file:
             tomlkit.dump(data, config_file)  # pyright: ignore[reportUnknownMemberType]
