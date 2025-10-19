@@ -82,7 +82,6 @@ class ConversionCog(commands.Cog):
         self,
         interaction: disnake.GuildCommandInteraction[Bot],
         input: str,
-        # TODO: converters can be used here
         target: str | None = None,
         verbose: bool = False,
     ) -> None:
