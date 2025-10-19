@@ -9,6 +9,9 @@ dependencies = [
   "result",
   "rich",
   "python-dotenv",
+  "pydantic",
+  "pydantic-settings",
+  "tomlkit",
 ]
 
 [project.optional-dependencies]

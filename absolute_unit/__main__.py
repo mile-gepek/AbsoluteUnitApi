@@ -3,7 +3,7 @@ from absolute_unit.bot import Bot
 
 def main() -> int:
     bot = Bot.default()
-    bot.run(bot.config.bot_token)
+    bot.run(bot.settings.bot_token)
 
     return 0
 

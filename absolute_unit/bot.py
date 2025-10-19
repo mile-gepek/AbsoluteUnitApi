@@ -9,7 +9,7 @@ from pint.facets.plain import PlainQuantity
 from result import Err
 
 from absolute_unit import conversion, currencies
-from absolute_unit.config import Config
+from absolute_unit.config import Config, Settings
 
 
 logger = logging.getLogger(__name__)
@@ -17,34 +17,40 @@ logger = logging.getLogger(__name__)
 
 class Bot(commands.InteractionBot):
     def __init__(
-        self, config: Config, client: commands.InteractionBot, ureg: UnitRegistry
+        self,
+        settings: Settings,
+        config: Config,
+        client: commands.InteractionBot,
+        ureg: UnitRegistry,
     ) -> None:
-        super().__init__(test_guilds=config.test_guilds)
+        super().__init__(test_guilds=config.test_guild_ids)
+        self.settings: Settings = settings
         self.config: Config = config
         self.ureg: UnitRegistry = ureg
 
-        if config.test_guilds is None:
+        if config.test_guild_ids is None:
             logger.info("No test guilds specified, commands will be synced globally.")
         else:
             logger.info("Testing mode on, all errors will not be ephemeral.")
 
         self.currency_cog: currencies.CurrencyCog | None = None
-        currencyapi_token = config.currencyapi_token
-        if currencyapi_token is None:
+        currency_api_token = settings.currency_api_token
+        if currency_api_token is None:
             logging.info(
                 "currencyapi token not found in config, currency conversion will be disabled."
             )
         else:
-            self.currency_cog = currencies.CurrencyCog(self, currencyapi_token, ureg)
+            self.currency_cog = currencies.CurrencyCog(self, currency_api_token, ureg)
             self.add_cog(self.currency_cog)
         self.add_cog(ConversionCog(self))
 
     @classmethod
     def default(cls) -> Self:
+        settings = Settings.from_env().unwrap()
         config = Config.get_config().unwrap()
-        client = commands.InteractionBot(test_guilds=config.test_guilds)
+        client = commands.InteractionBot(test_guilds=config.test_guild_ids)
         ureg = UnitRegistry()
-        return cls(config, client, ureg)
+        return cls(settings, config, client, ureg)
 
 
 def cooldown_check(
@@ -169,7 +175,7 @@ class ConversionCog(commands.Cog):
                     timestamp = int(last_refresh.timestamp())
                     output += f"-# Currency exchange rates as of <t:{timestamp}:t>"
 
-        ephemeral = verbose and self.bot.config.test_guilds is None
+        ephemeral = verbose and self.bot.config.test_guild_ids is None
         await interaction.send(output, ephemeral=ephemeral)
 
     @commands.Cog.listener()

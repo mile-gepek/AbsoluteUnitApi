@@ -2,82 +2,81 @@
 Configuration module, check the `Config` class for configuration options.
 """
 
-import os
-from typing import Self
+import logging
+from pathlib import Path
+from typing import Any, ClassVar, Self
 
-from dotenv import load_dotenv
+import tomlkit
+from pydantic import BaseModel, Field, ValidationError
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from result import Err, Ok, Result
 
-_ = load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
-class ConfigError(Exception): ...
+class Settings(BaseSettings):
+    model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(env_file=".env")
+
+    bot_token: str
+    currency_api_token: str | None = None
+
+    @classmethod
+    def from_env(cls) -> Result[Self, ValidationError]:
+        try:
+            return Ok(cls.model_validate({}))
+        except ValidationError as validation_error:
+            return Err(validation_error)
 
 
-class MissingConfigKeyError(ConfigError):
-    def __init__(self, key_name: str) -> None:
-        super().__init__(f"Missing {key_name} key in config")
+class Config(BaseModel):
+    test_guild_ids: list[int] | None = None
 
+    mod_role_ids: list[int] = []
+    admin_role_ids: list[int] = []
 
-class Config:
-    """
-    Singleton class for all config, use the `get_config` method to get a config.
+    # cooldown length in seconds
+    cooldown_duration: float = 5
 
-    Options
-    -------
-    - DISCORD_APPLICATION_TOKEN `str`
-        - The token for the discord bot.
-
-    - CURRENCYAPI_TOKEN `Optional[str]`
-        - The token for the currencyapi.
-        - If not present currency conversion will be disabled.
-
-    - TEST_GUILD_ID: `Optional[int]`
-        - ID of the guild used for testing.
-        - If  the ID is present, only cooldown messages will be ephemeral, all other errors will not.
-    """
-
-    __config: Self | None = None
-
-    def __init__(
-        self,
-        bot_token: str,
-        currencyapi_token: str | None,
-        test_guilds: list[int] | None,
-    ) -> None:
-        self.bot_token: str = bot_token
-        self.currencyapi_token: str | None = currencyapi_token
-        self.test_guilds: list[int] | None = test_guilds
+    path: Path = Field(exclude=True)
 
     @property
     def testing_mode(self) -> bool:
-        return self.test_guilds is None
+        return self.test_guild_ids is not None
 
     @classmethod
-    def get_config(cls) -> Result[Self, ConfigError]:
-        """Gets the existing config or loads it."""
-        if cls.__config is not None:
-            return Ok(cls.__config)
+    def default_config(cls) -> Result[Self, ValidationError]:
+        """
+        Returns the default config.
+        """
+        return Ok(cls.model_validate({"path": Path("config.toml")}))
 
-        config = cls.load_config()
-        if isinstance(config, Err):
-            return config
-        new = cls(*config.ok())
-        cls.__config = new
-        return Ok(new)
+    @classmethod
+    def _create_config(
+        cls,
+        path: Path,
+        data: dict[str, Any],  # pyright: ignore[reportExplicitAny]
+    ) -> Result[Self, ValidationError]:
+        data["path"] = path
+        try:
+            return Ok(cls.model_validate(data))
+        except ValidationError as validation_error:
+            return Err(validation_error)
 
-    @staticmethod
-    def load_config() -> Result[tuple[str, str | None, list[int] | None], ConfigError]:
-        # TODO: it's annoying to add arguments and typing to init and this signature, find better way.
-        """Load all the options from the file."""
-        bot_token = os.getenv("DISCORD_APPLICATION_TOKEN")
-        if bot_token is None:
-            return Err(MissingConfigKeyError("DISCORD_APPLICATION_TOKEN"))
+    @classmethod
+    def get_config(cls, path: Path | None = None) -> Result[Self, ValidationError]:
+        """Load the config from the given, or "config.toml" by default."""
+        if path is None:
+            path = Path("config.toml")
+        try:
+            with path.open("r") as config_file:
+                data: dict[str, Any] = dict(tomlkit.load(config_file))  # pyright: ignore[reportExplicitAny]
+        except FileNotFoundError:
+            logger.info("config.toml file does not exist, using default config.")
+            return cls.default_config()
+        return cls._create_config(path, data)
 
-        currencyapi_token = os.getenv("CURRENCYAPI_TOKEN")
-
-        test_guilds = os.getenv("TEST_GUILD_ID")
-        if test_guilds is not None:
-            test_guilds = [int(test_guilds)]
-
-        return Ok((bot_token, currencyapi_token, test_guilds))
+    def write(self) -> None:
+        data = self.model_dump()
+        with self.path.open("w") as config_file:
+            tomlkit.dump(data, config_file)  # pyright: ignore[reportUnknownMemberType]
