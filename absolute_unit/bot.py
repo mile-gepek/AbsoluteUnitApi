@@ -56,7 +56,13 @@ class Bot(commands.InteractionBot):
 def cooldown_check(
     interaction: disnake.ApplicationCommandInteraction[Bot],
 ) -> commands.Cooldown | None:
-    if interaction.bot.config.testing_mode:
+    config = interaction.bot.config
+    user_id = interaction.user.id
+    if (
+        config.testing_mode
+        or user_id in config.admin_role_ids
+        or user_id in config.mod_role_ids
+    ):
         return None
     return commands.Cooldown(1, 5)
 
