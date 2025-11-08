@@ -122,6 +122,8 @@ class ConversionCog(commands.Cog):
         # disnake passes a string instead of the enum variant
         mode = ParserMode(mode)
 
+        ephemeral_errors = not self.bot.config.testing_mode
+
         # TODO: maybe clean this up by raising all errors, so the slash_command_error event can handle them
         expression_result = conversion.parse_input(input, self.bot.ureg, mode)
         if isinstance(expression_result, Err):
@@ -131,10 +133,7 @@ class ConversionCog(commands.Cog):
                 if isinstance(target_unit_result, Err):
                     error = target_unit_result.err()
                     error_message += f"Target unit errors:```\n{error}\n```"
-            print(self.bot.config.testing_mode)
-            return await interaction.send(
-                error_message, ephemeral=self.bot.config.testing_mode
-            )
+            return await interaction.send(error_message, ephemeral=ephemeral_errors)
         expression = expression_result.ok()
 
         output = ""
@@ -150,9 +149,7 @@ class ConversionCog(commands.Cog):
                     error = target_unit_result.err()
                     error_message += f"Target unit errors:```\n{error}\n```"
             output += error_message
-            return await interaction.send(
-                output, ephemeral=self.bot.config.testing_mode
-            )
+            return await interaction.send(output, ephemeral=ephemeral_errors)
         evaluated: PlainQuantity[float] = evaluation_result.ok().to_reduced_units()  # pyright: ignore [reportUnknownVariableType, reportUnknownMemberType]
 
         if target is None:
@@ -163,9 +160,7 @@ class ConversionCog(commands.Cog):
         if isinstance(target_unit_result, Err):
             error = target_unit_result.err()
             output += f"Target unit errors:```\n{error}\n```"
-            return await interaction.send(
-                output, ephemeral=self.bot.config.testing_mode
-            )
+            return await interaction.send(output, ephemeral=ephemeral_errors)
         target_unit = target_unit_result.ok()
 
         has_currency = conversion.has_different_currencies(
@@ -177,9 +172,7 @@ class ConversionCog(commands.Cog):
         conversion_result = conversion.convert(evaluated, target_unit)
         if isinstance(conversion_result, Err):
             output += str(conversion_result.err())
-            return await interaction.send(
-                output, ephemeral=self.bot.config.testing_mode
-            )
+            return await interaction.send(output, ephemeral=ephemeral_errors)
         converted = conversion_result.ok()
 
         # TODO: move allodis to a bigh "post-process" function
@@ -274,7 +267,7 @@ class ConversionCog(commands.Cog):
             msg = f"Error when attempting command:\n`{original_type_name}: {original_message}`\nThis is a bug."
         else:
             msg = f"Error when attempting command:\n`{original_type_name}`\nThis is a bug."
-        await interaction.send(msg, ephemeral=self.bot.config.testing_mode)
+        await interaction.send(msg, ephemeral=ephemeral_errors)
 
     @commands.Cog.listener()
     async def on_ready(self) -> None:
