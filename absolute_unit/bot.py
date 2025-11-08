@@ -269,6 +269,7 @@ class ConversionCog(commands.Cog):
             msg = f"Error when attempting command:\n`{original_type_name}: {original_message}`\nThis is a bug."
         else:
             msg = f"Error when attempting command:\n`{original_type_name}`\nThis is a bug."
+        ephemeral_errors = not self.bot.config.testing_mode
         await interaction.send(msg, ephemeral=ephemeral_errors)
 
     @commands.Cog.listener()
