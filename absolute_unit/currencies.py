@@ -1,6 +1,6 @@
 from asyncio import Task
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, time
 import logging
 from typing import Annotated, Any
 
@@ -19,6 +19,8 @@ from pydantic import (
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+midnight = time(0, 0, 0)
 
 
 def clear_ureg_cache(ureg: UnitRegistry, units: Sequence[str]) -> None:
@@ -137,8 +139,11 @@ class CurrencyCog(commands.Cog):
     def last_refresh_datetime(self) -> datetime | None:
         return self._last_refresh_datetime
 
-    @tasks.loop(hours=24)
+    @tasks.loop(time=midnight)
     async def refresh_currency_exchange_rates(self) -> None:
+        await self._refresh_impl()
+
+    async def _refresh_impl(self) -> None:
         response = await get_exchange_rates(
             self.currencyapi_session,
             self.base_currency,
@@ -150,4 +155,5 @@ class CurrencyCog(commands.Cog):
 
     @refresh_currency_exchange_rates.before_loop
     async def before(self) -> None:
+        await self._refresh_impl()
         await self._disnake_client.wait_until_ready()
