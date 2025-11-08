@@ -85,6 +85,8 @@ def cooldown_check(
     skip_roles = config.admin_role_ids + config.mod_role_ids
     if any(author_roles.has(role) for role in skip_roles):
         return None
+    if not config.cooldown_duration:
+        return None
 
     return commands.Cooldown(1, config.cooldown_duration)
 
