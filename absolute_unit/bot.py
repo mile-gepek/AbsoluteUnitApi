@@ -10,6 +10,7 @@ from result import Err
 
 from absolute_unit import conversion, currencies
 from absolute_unit.config import Config, Settings
+from absolute_unit.parsing import ParserMode
 
 
 logger = logging.getLogger(__name__)
@@ -102,6 +103,7 @@ class ConversionCog(commands.Cog):
         input: str,
         target: str | None = None,
         verbose: bool = False,
+        mode: ParserMode = ParserMode.Adaptive,
     ) -> None:
         """
         Convert the input expression.
@@ -114,9 +116,14 @@ class ConversionCog(commands.Cog):
             The output unit, infered if not specified.
         verbose:
             Print the intepretation of the parsed expression. Use this if output is unexpected.
+        mode:
+            Whether to make implicit operations use multiplication, or infer them from dimensionality.
         """
+        # disnake passes a string instead of the enum variant
+        mode = ParserMode(mode)
+
         # TODO: maybe clean this up by raising all errors, so the slash_command_error event can handle them
-        expression_result = conversion.parse_input(input, self.bot.ureg)
+        expression_result = conversion.parse_input(input, self.bot.ureg, mode)
         if isinstance(expression_result, Err):
             error_message = f"```\n{input}\n{expression_result.err()}\n```"
             if target is not None:
@@ -124,6 +131,7 @@ class ConversionCog(commands.Cog):
                 if isinstance(target_unit_result, Err):
                     error = target_unit_result.err()
                     error_message += f"Target unit errors:```\n{error}\n```"
+            print(self.bot.config.testing_mode)
             return await interaction.send(
                 error_message, ephemeral=self.bot.config.testing_mode
             )

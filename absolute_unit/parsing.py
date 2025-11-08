@@ -201,6 +201,10 @@ class Token(abc.ABC):
     def __repr__(self) -> str:
         return str(self)
 
+    @classmethod
+    @abc.abstractmethod
+    def repr_name(cls) -> str: ...
+
 
 class FloatToken(Token):
     """
@@ -229,6 +233,11 @@ class FloatToken(Token):
     def to_float(self) -> float:
         return float(self._token)
 
+    @override
+    @classmethod
+    def repr_name(cls) -> str:
+        return "number"
+
 
 class UnitToken(Token):
     """
@@ -241,6 +250,11 @@ class UnitToken(Token):
     @staticmethod
     def default_alphabet() -> str:
         return string.ascii_letters + "_"
+
+    @override
+    @classmethod
+    def repr_name(cls) -> str:
+        return "unit"
 
 
 class ParenType(enum.Enum):
@@ -323,6 +337,11 @@ class ParenToken(Token):
     def paren_type(self) -> ParenType:
         return self._paren_type
 
+    @override
+    @classmethod
+    def repr_name(cls) -> str:
+        return "group expression"
+
 
 class OperatorType(enum.Enum):
     ADD = "+"
@@ -375,6 +394,11 @@ class OperatorToken(Token):
     def op_type(self) -> OperatorType:
         return self._op_type
 
+    @override
+    @classmethod
+    def repr_name(cls) -> str:
+        return "operator"
+
 
 class Whitespace(Token):
     """
@@ -399,6 +423,10 @@ class Whitespace(Token):
             stream.advance()
         return ""
 
+    @override
+    @classmethod
+    def repr_name(cls) -> str: ...
+
 
 class UnknownToken(Token):
     """
@@ -420,6 +448,10 @@ class UnknownToken(Token):
             token += char
             stream.advance()
         return token
+
+    @override
+    @classmethod
+    def repr_name(cls) -> str: ...
 
 
 def tokenize(s: str) -> Generator[Token, None, None]:
@@ -907,6 +939,22 @@ class UnexpectedTokenError(ParsingError):
         super().__init__(f"Expected {expected}, got '{token.token}'.", token.span())
 
 
+class UnexpectedEolError(ParsingError):
+    def __init__(self, expected: str):
+        super().__init__(expected)
+
+
+def _format_expected(expected_token_types: tuple[type[Token], ...]) -> str:
+    *expected, last = expected_token_types
+    if not expected:
+        return last.repr_name()
+    if len(expected) == 1:
+        first_str = expected[0].repr_name()
+        last_str = last.repr_name()
+        return f"{first_str} or {last_str}"
+    return ", ".join(exp_class.repr_name() for exp_class in expected_token_types)
+
+
 class UnmatchedParenError(ParsingError):
     def __init__(self, paren_token: ParenToken):
         name = paren_token.paren_type.paren_name()
@@ -1012,9 +1060,19 @@ def format_errors(errors: Sequence[Error], input_len: int) -> str:
     return "\n".join(error_lines)
 
 
+class ParserMode(enum.Enum):
+    Adaptive = "adaptive"
+    Strict = "strict"
+
+
 class Parser:
-    def __init__(self, ureg: pint.UnitRegistry) -> None:
+    def __init__(
+        self, ureg: pint.UnitRegistry, mode: ParserMode = ParserMode.Adaptive
+    ) -> None:
         self.ureg: pint.UnitRegistry = ureg
+        self._mode: ParserMode = mode
+        self._token: Token | None = None
+        self._previous_token: Token | None = None
 
     def parse(self, input: str) -> Result[Expression, list[ParsingError]]:
         """
@@ -1030,6 +1088,54 @@ class Parser:
         tokens = list(tokenize(input))
         result = self._parse_expr(deque(tokens))
         return result
+
+    def _expect_token[T: Token](
+        self, tokens: deque[Token], expected: tuple[type[T], ...]
+    ) -> Result[T, UnexpectedTokenError | UnexpectedEolError]:
+        if not tokens:
+            expected_str = _format_expected(expected)
+            return Err(UnexpectedEolError(expected=expected_str))
+        token = tokens[0]
+        if not isinstance(token, expected):
+            expected_str = _format_expected(expected)
+            return Err(UnexpectedTokenError(token, expected=expected_str))
+        return Ok(token)
+
+    def _eat_token[T: Token](
+        self, tokens: deque[Token], expected: tuple[type[T], ...]
+    ) -> Result[T, UnexpectedTokenError | UnexpectedEolError]:
+        token_res = self._expect_token(tokens, expected)
+        if isinstance(token_res, Err):
+            return token_res
+        _ = tokens.popleft()
+        token = token_res.ok()
+        self._previous_token = self._token
+        self._token = token
+        return token_res
+
+    def _expect_two[T1: Token, T2: Token](
+        self,
+        tokens: deque[Token],
+        expect_first: tuple[type[T1], ...],
+        expect_second: tuple[type[T2], ...],
+    ) -> Result[tuple[T1, T2], UnexpectedTokenError | UnexpectedEolError]:
+        first_res = self._expect_token(tokens, expect_first)
+        if isinstance(first_res, Err):
+            return first_res
+        first = first_res.ok()
+
+        self._bump(tokens)
+        second_res = self._expect_token(tokens, expect_second)
+        tokens.appendleft(first)
+        if isinstance(second_res, Err):
+            return second_res
+        second = second_res.ok()
+        return Ok((first, second))
+
+    def _bump(self, tokens: deque[Token]) -> None:
+        token = tokens.popleft()
+        self._previous_token = self._token
+        self._token = token
 
     def _parse_expr(
         self,
@@ -1070,26 +1176,50 @@ class Parser:
             case OperatorType.MUL | OperatorType.DIV:
                 parse_term = self._parse_exp
             case OperatorType.EXP:
-                parse_term = self._parse_primary
+                match self._mode:
+                    case ParserMode.Adaptive:
+                        parse_term = self._parse_primary
+                    case ParserMode.Strict:
+                        parse_term = self._parse_primary_single
 
         term = parse_term(tokens)
         if isinstance(term, Err):
             error_group.extend(term.err())
 
         while tokens:
-            token = tokens[0]
+            token_res = self._expect_token(tokens, (Token,))
+            if isinstance(token_res, Err):
+                error_group.append(token_res.err())
+                continue
+            token = token_res.ok()
+
             op_type = None
             if isinstance(token, UnknownToken):
                 expected = "operator or group expression"
                 error_group.append(UnexpectedTokenError(token, expected=expected))
-                _ = tokens.popleft()
+                self._bump(tokens)
             elif isinstance(token, OperatorToken):
                 if token.op_type not in ops:
                     break
                 op_type = token.op_type
-                _ = tokens.popleft()
+                self._bump(tokens)
             # Implicit multiplication
-            elif OperatorType.MUL in ops:
+            elif (
+                OperatorType.MUL in ops
+                or OperatorType.EXP in ops
+                and self._mode == ParserMode.Adaptive
+            ):
+                if isinstance(token, FloatToken) and isinstance(
+                    self._token, FloatToken
+                ):
+                    message = "Expected operator or unit between numbers."
+                    start = self._token.end
+                    end = token.start
+                    error_group.append(
+                        ExpectedPrimaryError(message=message, span=(start, end))
+                    )
+                    self._bump(tokens)
+                    continue
                 op_type = OperatorType.MUL
             else:
                 break
@@ -1158,9 +1288,13 @@ class Parser:
         """
         op_list: list[OperatorToken] = []
         while tokens:
-            token = tokens[0]
+            token_res = self._expect_token(tokens, (Token,))
+            if isinstance(token_res, Err):
+                return Err([token_res.err()])
+            token = token_res.ok()
+
             if isinstance(token, UnknownToken):
-                _ = tokens.popleft()
+                self._bump(tokens)
                 return Err([UnexpectedTokenError(token, expected="expression")])
             if not isinstance(token, OperatorToken):
                 value = self._parse_mul(tokens)
@@ -1169,7 +1303,7 @@ class Parser:
                 break
             if token.op_type not in _UNARY_OP_MAP:
                 return Err([InvalidUnaryError(token)])
-            _ = tokens.popleft()
+            self._bump(tokens)
             op_list.append(token)
         else:
             return Err([ExpectedPrimaryError()])
@@ -1208,7 +1342,30 @@ class Parser:
         if not tokens:
             return Err([ExpectedPrimaryError()])
 
+        token_res = self._eat_token(tokens, (ParenToken,))
+        if isinstance(token_res, Ok):
+            return self._parse_group(tokens, token_res.ok())
         return self._parse_primary_chain(tokens)
+
+    def _parse_primary_single(
+        self, tokens: deque[Token]
+    ) -> Result[Primary | Group, list[ParsingError]]:
+        if not tokens:
+            return Err([ExpectedPrimaryError()])
+        token_res = self._eat_token(tokens, (ParenToken, FloatToken, UnitToken))
+        if isinstance(token_res, Err):
+            return Err([token_res.err()])
+        token = token_res.ok()
+
+        if isinstance(token, ParenToken):
+            return self._parse_group(tokens, token)
+        elif isinstance(token, FloatToken):
+            return Ok(Float(token.to_float(), *token.span()))
+        else:
+            res = Unit.from_token(token, self.ureg)
+            if isinstance(res, Ok):
+                return res
+            return Err([res.err()])
 
     def _parse_group(
         self,
@@ -1233,7 +1390,11 @@ class Parser:
         group_tokens: deque[Token] = deque()
         pairs_open = 1
         while tokens:
-            token = tokens.popleft()
+            token_res = self._eat_token(tokens, (Token,))
+            if isinstance(token_res, Err):
+                return Err([token_res.err()])
+            token = token_res.ok()
+
             if isinstance(token, ParenToken):
                 if token.paren_type == opening_pair.paren_type:
                     pairs_open += 1
@@ -1288,13 +1449,10 @@ class Parser:
         # TODO: DOCS.
         # TODO: this code is fucking disgusting.
 
-        token = tokens[0]
-        if isinstance(token, ParenToken):
-            _ = tokens.popleft()
-            return self._parse_group(tokens, token)
-
-        if not isinstance(token, (UnitToken, FloatToken)):
-            return Err([UnexpectedPrimaryError(token)])
+        token_res = self._expect_token(tokens, (FloatToken, UnitToken))
+        if isinstance(token_res, Err):
+            return Err([token_res.err()])
+        token = token_res.ok()
 
         error_group: list[ParsingError] = []
         previous_number_error = False
@@ -1303,11 +1461,14 @@ class Parser:
 
         subexpressions: deque[Binary | Primary | Group] = deque()
         curr_subexpr: Float | Unit | Binary | None = None
-        previous_token: FloatToken | UnitToken | None = None
         previous_unit: Unit | Binary | None = None
 
         while tokens:
-            token = tokens[0]
+            token_res = self._expect_token(tokens, (FloatToken, UnitToken))
+            if isinstance(token_res, Err):
+                break
+            token = token_res.ok()
+
             if isinstance(token, FloatToken):
                 number_res = self._parse_primary_expression(Float, tokens)
                 if isinstance(number_res, Err):
@@ -1318,30 +1479,29 @@ class Parser:
                         subexpressions.append(curr_subexpr)
                     curr_subexpr = number_res.ok()
 
-                if isinstance(previous_token, FloatToken):
+                if isinstance(self._previous_token, FloatToken):
                     if not previous_number_error:
                         message = "Expected operator or unit between numbers."
-                        start = previous_token.end
+                        start = self._previous_token.end
                         end = token.start
                         error_group.append(
                             ExpectedPrimaryError(message=message, span=(start, end))
                         )
                     previous_number_error = True
-                    previous_token = token
+                    self._previous_token = token
                     continue
 
-            elif isinstance(token, UnitToken):
+            else:
                 unit_res = self._parse_primary_expression(Unit, tokens)
                 if isinstance(unit_res, Err):
                     error_group.extend(unit_res.err())
                     curr_subexpr = None
                     previous_unit = None
-                    previous_token = token
                     continue
                 unit = unit_res.ok()
 
                 if (
-                    isinstance(previous_token, UnitToken)
+                    isinstance(self._previous_token, UnitToken)
                     and previous_unit is not None
                     and previous_unit.dimensionality() == unit.dimensionality()
                 ):
@@ -1356,7 +1516,6 @@ class Parser:
                         )
                     previous_unit_error = True
                     previous_unit = unit
-                    previous_token = token
                     continue
 
                 if curr_subexpr is None:
@@ -1368,10 +1527,6 @@ class Parser:
 
                 previous_unit = unit
 
-            else:
-                break
-
-            previous_token = token
             previous_number_error = False
             previous_unit_error = False
 
@@ -1416,21 +1571,27 @@ class Parser:
         """
         error_group: list[ParsingError] = []
 
-        first = tokens[0]
-        assert isinstance(first, primary.token_type)
-        token_type = type(first)
+        if exp:
+            op_res = self._eat_token(tokens, (FloatToken, UnitToken))
+        else:
+            op_res = self._expect_token(tokens, (FloatToken, UnitToken))
+        if isinstance(op_res, Err):
+            return Err([op_res.err()])
+        op = op_res.ok()
+
+        assert isinstance(op, primary.token_type)
+        token_type = type(op)
 
         if exp:
             ops = (OperatorType.EXP,)
-            res = primary.from_token(first, self.ureg)
-            _ = tokens.popleft()
-            if isinstance(res, Err):
-                error_group.append(res.err())
+            right_token = primary.from_token(op, self.ureg)
+            if isinstance(right_token, Err):
+                error_group.append(right_token.err())
                 # Type hint to avoid LSP complaints because `list` is invariant
-                errors: list[ParsingError] = [res.err()]
+                errors: list[ParsingError] = [right_token.err()]
                 term = Err(errors)
             else:
-                term = res
+                term = right_token
         else:
             ops = (OperatorType.DIV,)
             term = self._parse_primary_expression(primary, tokens, exp=True)
@@ -1438,15 +1599,17 @@ class Parser:
                 error_group.extend(term.err())
 
         while len(tokens) > 1:
-            op = tokens[0]
-            right_token = tokens[1]
-            if not isinstance(op, OperatorToken) or op.op_type not in ops:
+            op_right_res = self._expect_two(
+                tokens, (OperatorToken,), (FloatToken, UnitToken, ParenToken)
+            )
+            if isinstance(op_right_res, Err):
                 break
-            if not isinstance(right_token, (FloatToken, UnitToken, ParenToken)):
+            op, right_token = op_right_res.ok()
+            if op.op_type not in ops:
                 break
             if exp:
-                _ = tokens.popleft()
-                _ = tokens.popleft()
+                self._bump(tokens)
+                self._bump(tokens)
                 if isinstance(right_token, UnitToken):
                     message = f"Expected a number or dimensionless group as an exponent, got unit '{right_token.token}'."
                     error_group.append(
@@ -1471,8 +1634,7 @@ class Parser:
             else:
                 if not isinstance(right_token, token_type):
                     break
-                # Pop operator only if we want to use it.
-                _ = tokens.popleft()
+                self._bump(tokens)
                 right_res = self._parse_primary_expression(primary, tokens, exp=True)
                 if isinstance(right_res, Err):
                     error_group.extend(right_res.err())

@@ -123,8 +123,12 @@ def has_different_currencies(
     return "[currency]" in dim
 
 
-def parse_input(input: str, ureg: UnitRegistry) -> Result[parsing.Expression, str]:
-    parser = parsing.Parser(ureg)
+def parse_input(
+    input: str,
+    ureg: UnitRegistry,
+    mode: parsing.ParserMode = parsing.ParserMode.Adaptive,
+) -> Result[parsing.Expression, str]:
+    parser = parsing.Parser(ureg, mode)
     parsing_result = parser.parse(input)
     if isinstance(parsing_result, Err):
         errors = parsing_result.err_value
