@@ -2,12 +2,20 @@ from asyncio import Task
 from collections.abc import Sequence
 from datetime import datetime
 import logging
+from typing import Annotated, Any
 
 from aiohttp import ClientSession
 import disnake
 from disnake.ext import commands, tasks
 from pint import UnitRegistry
 from pint.util import UnitsContainer
+from pydantic import (
+    AliasPath,
+    BaseModel,
+    BeforeValidator,
+    Field,
+    ValidationError,
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -55,6 +63,53 @@ def clear_currencies(ureg: UnitRegistry):
         del units[currency]
 
 
+def get_exchange_rate_validator(value: dict[str, Any]) -> dict[str, float]:  # pyright: ignore[reportExplicitAny]
+    for k in value:
+        value[k] = value[k]["value"]
+    return value
+
+
+class CurrencyApiResponse(BaseModel):
+    last_updated_at: datetime = Field(
+        validation_alias=AliasPath("meta", "last_updated_at")
+    )
+    data: Annotated[dict[str, float], BeforeValidator(get_exchange_rate_validator)]
+
+
+async def get_exchange_rates(
+    currencyapi_session: ClientSession, base_currency: str
+) -> CurrencyApiResponse | None:
+    async with currencyapi_session as session:
+        params = {"base_currency": base_currency}
+        async with session.get("latest", params=params) as resp:
+            if resp.status != 200:
+                logger.warning(resp.reason)
+                return
+            resp_json = await resp.json()  # pyright: ignore[reportAny]
+
+    try:
+        response_model = CurrencyApiResponse.model_validate(resp_json)
+        return response_model
+    except ValidationError as e:
+        logger.info(f'Call to currencyapi endpoint "latest" is missing key: "{e}"')
+
+
+def define_exchange_rates(
+    ureg: UnitRegistry, base_currency: str, exchange_rates: dict[str, float]
+) -> None:
+    clear_ureg_cache(ureg, tuple(exchange_rates.keys()))
+    clear_currencies(ureg)
+    ureg.define(f"{base_currency} = [currency] = {base_currency.lower()}")
+    for currency, exchange_rate in exchange_rates.items():
+        if currency == base_currency:
+            continue
+        if currency in ureg or currency.lower() in ureg:
+            continue
+        ureg.define(
+            f"{currency} = {exchange_rate} * {base_currency} = {currency.lower()}"
+        )
+
+
 class CurrencyCog(commands.Cog):
     def __init__(
         self,
@@ -84,41 +139,14 @@ class CurrencyCog(commands.Cog):
 
     @tasks.loop(hours=24)
     async def refresh_currency_exchange_rates(self) -> None:
-        async with self.currencyapi_session as session:
-            params = {"base_currency": self.base_currency}
-            async with session.get("latest", params=params) as resp:
-                if resp.status != 200:
-                    logger.warning(resp.reason)
-                    return
-                # I could use pydantic but it seems overkill to add a dependancy just for this.
-                resp_json = await resp.json()  # pyright: ignore[reportAny]
-
-        try:
-            meta: dict[str, str] = resp_json["meta"]  # pyright: ignore[reportAny]
-            data = resp_json["data"]  # pyright: ignore[reportAny]
-            data_filtered: dict[str, int] = {code: data[code]["value"] for code in data}  # pyright: ignore[reportAny]
-
-            isotime: str = meta["last_updated_at"]
-            self._last_refresh_datetime = datetime.fromisoformat(isotime)
-
-            self._refresh_impl(data_filtered)
-        except KeyError as e:
-            logger.info(f'Call to currencyapi endpoint "latest" is missing key: "{e}"')
-
-    def _refresh_impl(self, exchange_rates: dict[str, int]) -> None:
-        clear_ureg_cache(self._ureg, tuple(exchange_rates.keys()))
-        clear_currencies(self._ureg)
-        self._ureg.define(
-            f"{self.base_currency} = [currency] = {self.base_currency.lower()}"
+        response = await get_exchange_rates(
+            self.currencyapi_session,
+            self.base_currency,
         )
-        for currency, exchange_rate in exchange_rates.items():
-            if currency == self.base_currency:
-                continue
-            if currency in self._ureg or currency.lower() in self._ureg:
-                continue
-            self._ureg.define(
-                f"{currency} = {exchange_rate} * {self.base_currency} = {currency.lower()}"
-            )
+        if response is None:
+            return
+        self._last_refresh_datetime = response.last_updated_at
+        define_exchange_rates(self._ureg, self.base_currency, response.data)
 
     @refresh_currency_exchange_rates.before_loop
     async def before(self) -> None:
