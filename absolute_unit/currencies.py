@@ -65,17 +65,20 @@ def clear_currencies(ureg: UnitRegistry):
         del units[currency]
 
 
-def get_exchange_rate_validator(value: dict[str, Any]) -> dict[str, float]:  # pyright: ignore[reportExplicitAny]
-    for k in value:
-        value[k] = value[k]["value"]
-    return value
+def extract_exchange_rates(currencies: dict[str, Any]) -> dict[str, float]:  # pyright: ignore[reportExplicitAny]
+    # The data that currencyapi.com gives is stupid.
+    # Example: `{"USD": {"code": "USD", value: 0.789}}`
+    # why is this a thing
+    for currency in currencies:
+        currencies[currency] = currencies[currency]["value"]
+    return currencies
 
 
 class CurrencyApiResponse(BaseModel):
     last_updated_at: datetime = Field(
         validation_alias=AliasPath("meta", "last_updated_at")
     )
-    data: Annotated[dict[str, float], BeforeValidator(get_exchange_rate_validator)]
+    data: Annotated[dict[str, float], BeforeValidator(extract_exchange_rates)]
 
 
 async def get_exchange_rates(
