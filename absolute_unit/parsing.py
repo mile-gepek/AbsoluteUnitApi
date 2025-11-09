@@ -638,8 +638,8 @@ class Binary(Expression):
         return f"Binary({self.op.value} ({self.left!r}, {self.right!r}))"
 
     def __rich_repr__(self) -> rich.repr.Result:
-        yield "op", self.op.value
         yield "left", self.left
+        yield "op", self.op.value
         yield "right", self.right
         yield "implicit", self.implicit, False
 
