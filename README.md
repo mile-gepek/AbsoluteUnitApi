@@ -2,13 +2,9 @@
 # AbsoluteUnit
 AbsoluteUnit is a discord bot for converting arbitrary measurement units, powered by [pint](https://pypi.org/project/Pint/) and [disnake](https://disnake.dev/).
 
-It features a custom parser which tries to parse expressions in a "human-friendly" way,
-e.g. parsing `5ft 9in`  as `5*ft + 9*in`, an explanation of the parsing rules can be found in the PARSING.md file.
-
-
 ## Features
 
-* A parser built to handle "human language-esque" input (e.g. `5ft 9in`), an explanation can be found in the PARSING.md file.
+* A parser built to handle input adaptively (e.g. intepreting `5ft 9in` as `5*ft + 9*in`), an explanation can be found in the PARSING.md file.
 * Arbitrary unit conversion, with a huge set of units available by default.
 * Currency conversion via [currencyapi](https://currencyapi.com) when [configured](#configuration) with an API key, exchange rates refreshed every 24 hours.
 

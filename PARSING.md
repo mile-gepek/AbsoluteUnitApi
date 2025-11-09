@@ -1,9 +1,14 @@
 
 
 # Parsing
-The "human-friendly" parsing tries to make the bot easier to use for common use cases by interpreting implicit operations differently based on the expression's dimensionality.
+The expression parser has 2 modes of function:
 
-## Rules
+- Adapative
+The adaptive parsing tries to make the bot easier to use for common use cases by interpreting implicit operations differently based on the expression's dimensionality.
+- Strict
+Strict parsing treats any implicit operation as multiplication, excluding  number expressions next to each other.
+
+## Rules for adaptive parsing
 These rules are definitely not perfect, possibly leading to odd interpretations.\
 Because of this, the `convert` command features a verbose mode which will print out the interpreted expression for debugging purposes.\
 I hope the system is good enough for everyday use, and suggestions are always welcome.
@@ -55,3 +60,15 @@ Because primary chains are parsed first, the parser can be used in the following
 
 ### Further parsing
 Further expressions are built from these chains with regular PEMDAS rules, and implicit multiplication.
+
+
+## Rules for strict parsing.
+
+Strict parsing does not rely on primary chains,  but rather singular numbers and units.
+
+Implicit operations are always treated as multiplication, unless there are 2 numbers next to each other, in which case the parser will return an error.
+
+### Examples
+| Input    | Interpretation |
+| :-: | :-: |
+| `5ft 9in` | $5 \cdot ft \cdot 9 \cdot in$ |
