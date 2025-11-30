@@ -63,12 +63,11 @@ Configuration is done through a `.env` file for secrets, and a `config.toml` fil
 | Key | Description | Optional | Default |
 | :-- | :-- | :-:  | :-: |
 | test_guild_ids | The list of guilds to register commands to when testing.<br>Enables testing mode if any IDs are present. | Yes | `[]` |
-| ephemeral_errors | Enable or disable ephemeral errors regardless of testing mode. Falls back to testing mode if omitted. | Yes | `None` |
+| ephemeral_errors | Enable or disable ephemeral errors regardless of testing mode. If omitted, errors are only ephemeral when the bot is not in testing mode. | Yes | `None` |
 | mod_role_ids | A list of mod role ids.<br>Anyone with a mod role bypasses cooldowns | Yes | `[]` |
 | admin_role_ids | A list of admin role ids.<br>Anyone with an admin role bypasses cooldowns, and can change configuration through commands. | Yes | `[]` |
 | cooldown_duration | A float representing cooldown duration in seconds. | Yes | `5` |
 | log_level | The default severity level for logging. | Yes | `"warning"` |
-
 
 Example:
 ```toml
