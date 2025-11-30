@@ -49,7 +49,7 @@ def setup_logging(log_level: LogLevel) -> None:
         "%(asctime)s %(name)s [%(levelname)s] %(message)s"
     )
 
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger("absolute_unit")
     logger.setLevel(level)
 
     io_handler = logging.StreamHandler()
