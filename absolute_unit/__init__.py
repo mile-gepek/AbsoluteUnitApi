@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import disnake
 from typing import override
 
 
@@ -51,3 +53,19 @@ disnake_logger.setLevel(logging.DEBUG)
 handler = logging.FileHandler(filename="disnake.log", encoding="utf-8", mode="w")
 handler.setFormatter(logging_formatter)
 disnake_logger.addHandler(handler)
+
+
+class DisnakeHandler(logging.Handler):
+    def __init__(
+        self,
+        channel: disnake.channel.PartialMessageable,
+        loop: asyncio.AbstractEventLoop,
+        level: int = logging.WARNING,
+    ) -> None:
+        self._channel: disnake.channel.PartialMessageable = channel
+        self._loop: asyncio.AbstractEventLoop = loop
+        super().__init__(level)
+
+    @override
+    def emit(self, record: logging.LogRecord) -> None:
+        _ = self._loop.create_task(self._channel.send(record.getMessage()))
