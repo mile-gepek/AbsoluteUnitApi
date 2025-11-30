@@ -11,7 +11,7 @@ class CustomFormatter(logging.Formatter):
     reset: str = "\x1b[0m"
 
     format_str: str = (
-        f"{red}%(asctime)s{reset} %(name)s [{{}}%(levelname)s]{reset} %(message)s"
+        f"{red}%(asctime)s{reset} %(name)s [{{}}%(levelname)s{reset}] %(message)s"
     )
 
     FORMATS: dict[int, str] = {
