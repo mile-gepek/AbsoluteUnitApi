@@ -60,7 +60,7 @@ class Config(BaseModel):
     def ephemeral_errors(self) -> bool:
         if self.force_ephemeral_errors is not None:
             return self.force_ephemeral_errors
-        return self.testing_mode
+        return not self.testing_mode
 
     @classmethod
     def default_config(cls) -> Result[Self, ValidationError]:

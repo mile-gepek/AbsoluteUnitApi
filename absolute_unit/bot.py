@@ -134,7 +134,7 @@ class ConversionCog(commands.Cog):
         # disnake passes a string instead of the enum variant
         mode = ParserMode(mode)
 
-        ephemeral_errors = not self.bot.config.ephemeral_errors
+        ephemeral_errors = self.bot.config.ephemeral_errors
 
         # TODO: maybe clean this up by raising all errors, so the slash_command_error event can handle them
         expression_result = conversion.parse_input(input, self.bot.ureg, mode)
