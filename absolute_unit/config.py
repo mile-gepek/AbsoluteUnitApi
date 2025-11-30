@@ -46,7 +46,9 @@ class Config(BaseModel):
     cooldown_duration: float = 5
 
     discord_logging: DisnakeLoggingConfig | None
+
     log_level: Annotated[LogLevel, BeforeValidator(str.lower)] = LogLevel.WARNING
+
     path: Path = Field(Path("config.toml"), exclude=True)
 
     @property
