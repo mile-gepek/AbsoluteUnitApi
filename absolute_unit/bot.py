@@ -8,9 +8,9 @@ from pint import UnitRegistry
 from pint.facets.plain import PlainQuantity
 from result import Err
 
-import absolute_unit
 from absolute_unit import conversion, currencies
 from absolute_unit.config import Config, Settings
+from absolute_unit.logging import DisnakeHandler, setup_logging
 from absolute_unit.parsing import ParserMode
 
 logger = logging.getLogger(__name__)
@@ -50,9 +50,7 @@ class Bot(commands.InteractionBot):
             channel = self.get_partial_messageable(channel_id)
             loop = self.loop
             level = self.config.discord_logging.level
-            disnake_handler = absolute_unit.DisnakeHandler(
-                channel, loop, level.to_value()
-            )
+            disnake_handler = DisnakeHandler(channel, loop, level.to_value())
             global_logger = logging.getLogger()
             global_logger.addHandler(disnake_handler)
 
@@ -60,13 +58,8 @@ class Bot(commands.InteractionBot):
     def default(cls) -> Self:
         settings = Settings.from_env().unwrap()
         config = Config.get_config().unwrap()
-        intents = disnake.Intents.default()
-        intents.guilds = True
-        intents.members = True
-        intents.dm_typing
-        client = commands.InteractionBot(
-            test_guilds=config.test_guild_ids, intents=intents
-        )
+        setup_logging(config.log_level)
+        client = commands.InteractionBot(test_guilds=config.test_guild_ids)
         ureg = UnitRegistry()
         return cls(settings, config, client, ureg)
 

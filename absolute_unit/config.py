@@ -2,16 +2,16 @@
 Configuration module, check the `Config` class for configuration options.
 """
 
-import enum
 import logging
 from pathlib import Path
 from typing import Annotated, Any, ClassVar, Self
 
-import pydantic
 import tomlkit
 from pydantic import BaseModel, BeforeValidator, Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from result import Err, Ok, Result
+
+from absolute_unit.logging import LogLevel
 
 
 logger = logging.getLogger(__name__)
@@ -31,17 +31,6 @@ class Settings(BaseSettings):
             return Err(validation_error)
 
 
-class LogLevel(enum.Enum):
-    INFO = "info"
-    DEBUG = "debug"
-    WARNING = "warning"
-    ERROR = "error"
-    CRITICAL = "critical"
-
-    def to_value(self) -> int:
-        return logging._nameToLevel[self.value.upper()]  # pyright: ignore[reportPrivateUsage]
-
-
 class DisnakeLoggingConfig(BaseModel):
     channel_id: int
     level: Annotated[LogLevel, BeforeValidator(str.lower)] = LogLevel.WARNING
@@ -57,7 +46,7 @@ class Config(BaseModel):
     cooldown_duration: float = 5
 
     discord_logging: DisnakeLoggingConfig | None
-
+    log_level: Annotated[LogLevel, BeforeValidator(str.lower)] = LogLevel.WARNING
     path: Path = Field(Path("config.toml"), exclude=True)
 
     @property

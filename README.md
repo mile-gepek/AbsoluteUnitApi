@@ -66,6 +66,7 @@ Configuration is done through a `.env` file for secrets, and a `config.toml` fil
 | mod_role_ids | A list of mod role ids.<br>Anyone with a mod role bypasses cooldowns | Yes | `[]` |
 | admin_role_ids | A list of admin role ids.<br>Anyone with an admin role bypasses cooldowns, and can change configuration through commands. | Yes | `[]` |
 | cooldown_duration | A float representing cooldown duration in seconds. | Yes | `5` |
+| log_level | The default severity level for logging. | Yes | `"warning"` |
 
 
 Example:
@@ -74,7 +75,9 @@ test_guild_ids = [123456789012345678]
 
 admin_role_ids = [123456789012345678]
 
-cooldown-duration = 6.7
+cooldown_duration = 6.7
+
+log_level = "error"
 ```
 
 #### [discord_logging] section
@@ -82,22 +85,23 @@ cooldown-duration = 6.7
 | Key | Description | Optional | Default |
 | :-- | :-- | :-:  | :-: |
 | channel_id | ID of the channel to log to. This can be any text channel or unlocked thread. | No | |
-| level | The severity level to log | Yes | `"warning"` |
+| level | The severity level to log. | Yes | `"warning"` |
 
 Example:
 ```toml
 [discord_logging]
 channel_id = 123456789012345678
-level = "ERROR"
+level = "error"
 ```
 
 ### Example config
 ```toml
 test_guild_ids = [123456789012345678]
 admin_role_ids = [123456789012345678]
-cooldown-duration = 6.7
+cooldown_duration = 6.7
+log_level = "error"
 
 [discord_logging]
 channel_id = 123456789012345678
-level = "ERROR"
+level = "error"
 ```
