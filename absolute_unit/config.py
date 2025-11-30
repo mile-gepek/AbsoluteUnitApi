@@ -38,6 +38,7 @@ class DisnakeLoggingConfig(BaseModel):
 
 class Config(BaseModel):
     test_guild_ids: list[int] | None = None
+    force_ephemeral_errors: bool | None = Field(None, alias="ephemeral_errors")
 
     mod_role_ids: list[int] = Field([])
     admin_role_ids: list[int] = []
@@ -54,6 +55,12 @@ class Config(BaseModel):
     @property
     def testing_mode(self) -> bool:
         return self.test_guild_ids is not None
+
+    @property
+    def ephemeral_errors(self) -> bool:
+        if self.force_ephemeral_errors is not None:
+            return self.force_ephemeral_errors
+        return self.testing_mode
 
     @classmethod
     def default_config(cls) -> Result[Self, ValidationError]:
