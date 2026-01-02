@@ -46,7 +46,7 @@ class Config(BaseModel):
     # cooldown length in seconds
     cooldown_duration: float = 5
 
-    discord_logging: DisnakeLoggingConfig | None
+    discord_logging: DisnakeLoggingConfig | None = None
 
     log_level: Annotated[LogLevel, BeforeValidator(str.lower)] = LogLevel.WARNING
 

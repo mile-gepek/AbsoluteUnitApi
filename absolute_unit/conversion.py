@@ -1,3 +1,4 @@
+import time
 import pint
 from pint import UnitRegistry
 from pint.facets.plain import PlainQuantity

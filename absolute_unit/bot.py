@@ -1,6 +1,7 @@
 import logging
 import traceback
 from typing import Callable, Self
+from concurrent.futures import ThreadPoolExecutor
 
 import disnake
 from disnake.ext import commands
@@ -137,7 +138,13 @@ class ConversionCog(commands.Cog):
         ephemeral_errors = self.bot.config.ephemeral_errors
 
         # TODO: maybe clean this up by raising all errors, so the slash_command_error event can handle them
-        expression_result = conversion.parse_input(input, self.bot.ureg, mode)
+        with ThreadPoolExecutor(1) as executor:
+            future = executor.submit(lambda: conversion.parse_input(input, self.bot.ureg, mode))
+            try:
+                expression_result = future.result(timeout=2)
+            except TimeoutError:
+                await interaction.send("Parsing timed out, this is probably a bug.", ephemeral=True)
+                return
         if isinstance(expression_result, Err):
             error_message = f"```\n{input}\n{expression_result.err()}\n```"
             if target is not None:
