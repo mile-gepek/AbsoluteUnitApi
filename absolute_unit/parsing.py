@@ -593,8 +593,8 @@ class Binary(Expression):
             return Err(errors)
         try:
             return Ok(op(left.unwrap(), right.unwrap()))
-        except OverflowError:
-            return Err([EvaluationError("Overflow error.", self.span())])
+        # except OverflowError:
+        #     return Err([EvaluationError("Overflow error.", self.span())])
         except pint.errors.PintError as e:
             return Err([EvaluationError(str(e), self.span())])
 
@@ -1113,12 +1113,12 @@ class Parser:
         self._token = token
         return token_res
 
-    def _expect_two[T1: Token, T2: Token](
+    def _expect_two[T: Token](
         self,
         tokens: deque[Token],
-        expect_first: tuple[type[T1], ...],
-        expect_second: tuple[type[T2], ...],
-    ) -> Result[tuple[T1, T2], UnexpectedTokenError | UnexpectedEolError]:
+        expect_first: tuple[type[T], ...],
+        expect_second: tuple[type[T], ...],
+    ) -> Result[tuple[T, T], UnexpectedTokenError | UnexpectedEolError]:
         first_res = self._expect_token(tokens, expect_first)
         if isinstance(first_res, Err):
             return first_res

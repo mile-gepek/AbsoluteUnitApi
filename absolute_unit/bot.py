@@ -51,7 +51,7 @@ class Bot(commands.InteractionBot):
             loop = self.loop
             level = self.config.discord_logging.level
             disnake_handler = DisnakeHandler(channel, loop, level.to_value())
-            global_logger = logging.getLogger()
+            global_logger = logging.getLogger("absolute_unit")
             global_logger.addHandler(disnake_handler)
 
     @classmethod
@@ -60,7 +60,7 @@ class Bot(commands.InteractionBot):
         config = Config.get_config().unwrap()
         setup_logging(config.log_level)
         client = commands.InteractionBot(test_guilds=config.test_guild_ids)
-        ureg = UnitRegistry()
+        ureg = UnitRegistry(autoconvert_offset_to_baseunit=True)
         return cls(settings, config, client, ureg)
 
 
@@ -264,8 +264,9 @@ class ConversionCog(commands.Cog):
             )
             return
 
+        input = interaction.filled_options
         logger.error(
-            f"Error when attempting command '{interaction.application_command.name}': \"{error}\""
+            f"Error when attempting command '{interaction.application_command.name}': \"{error}\"\nInputs: {input}"
         )
         traceback.print_exception(error)
 
@@ -276,9 +277,9 @@ class ConversionCog(commands.Cog):
         original_type_name = type(original).__name__
         original_message = str(original)
         if original_message:
-            msg = f"Error when attempting command:\n`{original_type_name}: {original_message}`\nThis is a bug."
+            msg = f"Error when attempting command:\n`{original_type_name}: {original_message}`\nInputs: {input}\nThis is a bug."
         else:
-            msg = f"Error when attempting command:\n`{original_type_name}`\nThis is a bug."
+            msg = f"Error when attempting command:\n`{original_type_name}`\nInputs: {input}\nThis is a bug."
         ephemeral_errors = not self.bot.config.testing_mode
         await interaction.send(msg, ephemeral=ephemeral_errors)
 
