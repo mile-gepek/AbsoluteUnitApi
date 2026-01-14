@@ -15,6 +15,7 @@ metric_to_imperial = {
     "kilogram": "pound",
     "gram": "ounce",
     "kilometer_per_hour": "mile_per_hour",
+    "degree_Celsius": "degree_Fahrenheit",
 }
 
 
@@ -24,6 +25,7 @@ imperial_to_metric = {
     "inch": "centimeter",
     "pound": "kilogram",
     "mile_per_hour": "kilometer_per_hour",
+    "degree_Fahrenheit": "degree_Celsius",
 }
 
 
@@ -146,7 +148,7 @@ def evaluate_expression(
         errors = evaluation_result.err_value
         errors_formatted = parsing.format_errors(errors, expression.end())
         return Err(errors_formatted)
-    return evaluation_result
+    return evaluation_result.map(ureg.Quantity)
 
 
 def convert(
