@@ -16,6 +16,7 @@ metric_to_imperial = {
     "gram": "ounce",
     "kph": "mph",
     "celsius": "fahrenheit",
+    "liter": "gallon",
 }
 
 
@@ -26,6 +27,9 @@ imperial_to_metric = {
     "pound": "kilogram",
     "mph": "kph",
     "fahrenheit": "celsius",
+    "gallon": "liter",
+    "pint": "liter",
+    "floz": "milliliter",
 }
 
 
