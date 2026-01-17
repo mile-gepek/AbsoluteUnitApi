@@ -1,0 +1,417 @@
+# Default Pint units definition file
+# Based on the International System of Units
+# Language: english
+# :copyright: 2013,2019 by Pint Authors, see AUTHORS for more details.
+
+# Syntax
+# ======
+# Units
+# -----
+# <canonical name> = <relation to another unit or dimension> [= <symbol>] [= <alias>] [ = <alias> ] [...]
+#
+# The canonical name and aliases should be expressed in singular form.
+# Pint automatically deals with plurals built by adding 's' to the singular form; plural
+# forms that don't follow this rule should be instead explicitly listed as aliases.
+#
+# If a unit has no symbol and one wants to define aliases, then the symbol should be
+# conventionally set to _.
+#
+# Example:
+#     millennium = 1e3 * year = _ = millennia
+#
+#
+# Prefixes
+# --------
+# <prefix>- = <amount> [= <symbol>] [= <alias>] [ = <alias> ] [...]
+#
+# Example:
+#     deca- =  1e+1  = da- = deka-
+#
+#
+# Derived dimensions
+# ------------------
+# [dimension name] = <relation to other dimensions>
+#
+# Example:
+#     [density] = [mass] / [volume]
+#
+# Note that primary dimensions don't need to be declared; they can be
+# defined for the first time in a unit definition.
+# E.g. see below `meter = [length]`
+#
+#
+# Additional aliases
+# ------------------
+# @alias <canonical name or previous alias> = <alias> [ = <alias> ] [...]
+#
+# Used to add aliases to already existing unit definitions.
+# Particularly useful when one wants to enrich definitions
+# from defaults_en.txt with custom aliases.
+#
+# Example:
+#     @alias meter = my_meter
+
+# See also: https://pint.readthedocs.io/en/latest/defining.html
+
+@defaults
+    group = international
+    system = mks
+@end
+
+
+#### PREFIXES ####
+
+# decimal prefixes
+quecto- = 1e-30 = q-
+ronto- = 1e-27 = r-
+yocto- = 1e-24 = y-
+zepto- = 1e-21 = z-
+atto- =  1e-18 = a-
+femto- = 1e-15 = f-
+pico- =  1e-12 = p-
+nano- =  1e-9  = n-
+# The micro (U+00B5) and Greek mu (U+03BC) are both valid prefixes,
+# and they often use the same glyph.
+micro- = 1e-6  = µ- = μ- = u- = mu- = mc-
+milli- = 1e-3  = m-
+centi- = 1e-2  = c-
+deci- =  1e-1  = d-
+deca- =  1e+1  = da- = deka-
+hecto- = 1e2   = h-
+kilo- =  1e3   = k-
+mega- =  1e6   = M-
+giga- =  1e9   = G-
+tera- =  1e12  = T-
+peta- =  1e15  = P-
+exa- =   1e18  = E-
+zetta- = 1e21  = Z-
+yotta- = 1e24  = Y-
+ronna- = 1e27 = R-
+quetta- = 1e30 = Q-
+
+# binary_prefixes
+kibi- = 2**10 = Ki-
+mebi- = 2**20 = Mi-
+gibi- = 2**30 = Gi-
+tebi- = 2**40 = Ti-
+pebi- = 2**50 = Pi-
+exbi- = 2**60 = Ei-
+zebi- = 2**70 = Zi-
+yobi- = 2**80 = Yi-
+
+# extra_prefixes
+semi- = 0.5 = _ = demi-
+sesqui- = 1.5
+
+
+#### BASE UNITS ####
+
+meter = [length] = m = metre
+second = [time] = s = sec
+ampere = [current] = A = amp
+candela = [luminosity] = cd = candle
+gram = [mass] = g
+mole = [substance] = mol
+kelvin = [temperature]; offset: 0 = K
+radian = [] = rad
+bit = [information] = b
+count = []
+
+
+#### CONSTANTS ####
+
+@import constants.txt
+
+# Angle
+turn = 2 * π * radian
+degree = π / 180 * radian = deg
+arcminute = degree / 60 = arcmin
+arcsecond = arcminute / 60 = arcsec
+grade = π / 200 * radian = grad = gradian
+
+# Solid angle
+steradian = radian ** 2 = sr
+
+# Information
+baud = bit / second = Bd = bps
+
+byte = 8 * bit = B = octet
+
+# Dimensionless ratios
+percent = 0.01 = %
+permille = 0.001 = ‰   # NOTE: ‰ = U+2030 (PER MILLE SIGN)
+ppm = 1e-6
+
+# Length
+angstrom = 1e-10 * meter = Å = ångström = Å
+micron = micrometer
+fermi = femtometer
+lightyear = speed_of_light * julian_year = ly = light_year
+au = 149597870700 * meter = astronomical_unit  # since Aug 2012
+parsec = 1 / tansec * astronomical_unit
+nmi = 1852 * meter = nautical_mile
+
+# Mass
+tonne = 1e3 * kilogram = t = metric_ton
+dalton = atomic_mass_constant = Da
+grain = 64.79891 * milligram
+gamma_mass = microgram
+carat = 200 * milligram
+
+# Time
+minute = 60 * second = min
+hour = 60 * minute = h = hr
+day = 24 * hour = d
+week = 7 * day
+fortnight = 2 * week = fortnite
+year = 365.25 * day = a = yr = julian_year
+month = year / 12
+decade = 10 * year
+century = 100 * year = _ = centuries
+millennium = 1e3 * year = _ = millennia
+eon = 1e9 * year
+
+# Temperature
+celsius = kelvin; offset: 273.15 = °C = C = c
+fahrenheit = 5 / 9 * kelvin; offset: 233.15 + 200 / 9 = °F = F = f
+rankine = 5 / 9 * kelvin; offset: 0 = °R
+reaumur = 5 / 4 * kelvin; offset: 273.15 = °Re
+
+# Area
+[area] = [length] ** 2
+are = 100 * meter ** 2
+hectare = 100 * are = ha
+
+# Volume
+[volume] = [length] ** 3
+liter = decimeter ** 3 = l = L = ℓ = litre
+cubic_centimeter = centimeter ** 3 = cc
+microliter = lambda = λ
+stere = meter ** 3
+
+# Frequency
+[frequency] = 1 / [time]
+hertz = 1 / second = Hz
+rpm = revolution / minute
+rps = revolution / second
+cps = count / second
+
+# Velocity
+[velocity] = [length] / [time]
+[speed] = [velocity]
+knot = nautical_mile / hour = kn = kt = knot_international = international_knot
+mph = mile / hour = MPH = mile_per_hour
+kph = kilometer / hour = KPH = kilometer_per_hour
+kps = kilometer / second = kilometer_per_second
+mps = meter / second = meter_per_second 
+fps = foot / second = foot_per_second 
+
+# Volumetric Flow Rate
+[volumetric_flow_rate] = [volume] / [time]
+sverdrup = 1e6 * meter ** 3 / second = sv
+
+# Force
+[force] = [mass] * [acceleration]
+newton = kilogram * meter / second ** 2 = N
+
+# Energy
+[energy] = [force] * [length]
+joule = newton * meter = J
+Wh = watt * hour = watt_hour = watthour
+eV = e * volt = electronvolt
+calorie = 4.184 * joule = cal = thermochemical_calorie = cal_th
+
+# Power
+[power] = [energy] / [time]
+watt = joule / second = W
+voltampere = volt * ampere = volte_ampere = VA
+horsepower = 550 * foot * force_pound / second = hp = UK_horsepower = hydraulic_horsepower
+
+# Momentum
+[momentum] = [length] * [mass] / [time]
+
+# Density
+[density] = [mass] / [volume]
+
+# Pressure
+[pressure] = [force] / [area]
+pascal = newton / meter ** 2 = Pa
+bar = 1e5 * pascal
+psi = force_pound / inch ** 2 = pound_force_per_square_inch
+
+# Torque
+[torque] = [force] * [length]
+ft_lb = foot * force_pound = foot_pound = footpound
+
+# Viscosity
+[viscosity] = [pressure] * [time]
+poise = 0.1 * Pa * second = P
+reyn = psi * second
+
+# Kinematic viscosity
+[kinematic_viscosity] = [area] / [time]
+stokes = centimeter ** 2 / second = St
+
+# Fluidity
+[fluidity] = 1 / [viscosity]
+rhe = 1 / poise
+
+# Amount of substance
+particle = 1 / N_A = _ = molecule
+
+# Concentration
+[concentration] = [substance] / [volume]
+molar = mole / liter = M
+
+# Radiation
+becquerel = counts_per_second = Bq
+curie = 3.7e10 * becquerel = Ci
+rutherford = 1e6 * becquerel = Rd
+gray = joule / kilogram = Gy
+sievert = joule / kilogram = Sv
+rads = 0.01 * gray
+rem = 0.01 * sievert
+roentgen = 2.58e-4 * coulomb / kilogram = _ = röntgen  # approximate, depends on medium
+
+# Luminance
+[luminance] = [luminosity] / [area]
+nit = candela / meter ** 2
+stilb = candela / centimeter ** 2
+lambert = 1 / π * candela / centimeter ** 2
+
+# Luminous flux
+[luminous_flux] = [luminosity]
+lumen = candela * steradian = lm
+
+# Illuminance
+[illuminance] = [luminous_flux] / [area]
+lux = lumen / meter ** 2 = lx
+
+# Charge
+[charge] = [current] * [time]
+coulomb = ampere * second
+faraday = e * N_A * mole
+Ah = ampere * hour = ampere_hour
+
+# Electric potential
+[electric_potential] = [energy] / [charge]
+volt = joule / coulomb = V
+
+[electric_field] = [electric_potential] / [length]
+
+[resistance] = [electric_potential] / [current]
+ohm = volt / ampere = Ω
+
+[resistivity] = [resistance] * [length]
+
+[conductance] = [current] / [electric_potential]
+siemens = ampere / volt = S = mho
+
+[conductivity] = [conductance]/[length]
+
+[capacitance] = [charge] / [electric_potential]
+farad = coulomb / volt
+
+[magnetic_flux] = [electric_potential] * [time]
+weber = volt * second = Wb
+
+[inductance] = [magnetic_flux] / [current]
+henry = weber / ampere = H
+
+[magnetic_field] = [magnetic_flux] / [area]
+tesla = weber / meter ** 2 = T
+gamma = 1e-9 * tesla = γ
+
+
+decibelwatt = watt; logbase: 10; logfactor: 10 = dBW
+decibelmilliwatt = 1e-3 watt; logbase: 10; logfactor: 10 = dBm
+decibelmicrowatt = 1e-6 watt; logbase: 10; logfactor: 10 = dBu
+
+decibel = 1 ; logbase: 10; logfactor: 10 = dB = db
+
+octave = 1 ; logbase: 2; logfactor: 1 = oct
+
+
+@group USCSLengthInternational
+    thou = 1e-3 * inch = th = mil_length
+    inch = yard / 36 = in = international_inch = inches = international_inches
+    hand = 4 * inch
+    foot = yard / 3 = ft = international_foot = feet = international_feet
+    yard = 0.9144 * meter = yd = international_yard  # since Jul 1959
+    mile = 1760 * yard = mi = international_mile
+@end
+
+@group USCSLengthSurvey
+    link = 1e-2 * chain = li = survey_link
+    survey_foot = 1200 / 3937 * meter = sft
+    fathom = 6 * survey_foot
+    rod = 16.5 * survey_foot = rd = pole = perch
+    chain = 4 * rod
+    furlong = 40 * rod = fur
+    cables_length = 120 * fathom
+    survey_mile = 5280 * survey_foot = smi = us_statute_mile
+    league = 3 * survey_mile
+
+    acre = 10 * chain ** 2
+@end
+
+@group USCSLiquidVolume
+    gallon = 231 * inch ** 3 = gal
+    fifth = gallon / 5
+    quart = gallon / 4
+    pint = quart / 2
+    minim = pint / 7680
+    fldr = pint / 128 = fl_dr = fluid_dram
+    floz = pint / 16 = fl_oz = fluid_ounce
+    gill = pint / 4
+@end
+
+@group USCSVolumeOther
+    teaspoon = fluid_ounce / 6 = tsp
+    tablespoon = fluid_ounce / 2 = tbsp
+    shot = 3 * tablespoon = jig = US_shot
+    cup = pint / 2 = cp = liquid_cup = US_liquid_cup
+    barrel = 31.5 * gallon = bbl
+    hogshead = 63 * gallon
+@end
+
+@group Avoirdupois
+    dram = pound / 256 = dr = avoirdupois_dram = avdp_dram
+    ounce = pound / 16 = oz = avoirdupois_ounce = avdp_ounce
+    pound = 7e3 * grain = lb = avoirdupois_pound = avdp_pound
+    ton = 2e3 * pound = _ = short_ton
+@end
+
+#### SYSTEMS OF UNITS ####
+
+@system SI
+    second
+    meter
+    kilogram
+    ampere
+    kelvin
+    mole
+    candela
+@end
+
+@system mks using international
+    meter
+    kilogram
+    second
+@end
+
+@system cgs using international, Gaussian, ESU
+    centimeter
+    gram
+    second
+@end
+
+@system imperial using ImperialVolume, USCSLengthInternational, AvoirdupoisUK
+    yard
+    pound
+@end
+
+@system US using USCSLiquidVolume, USCSDryVolume, USCSVolumeOther, USCSLengthInternational, USCSLengthSurvey, AvoirdupoisUS
+    yard
+    pound
+@end

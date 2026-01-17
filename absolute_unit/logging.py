@@ -83,4 +83,7 @@ class DisnakeHandler(logging.Handler):
 
     @override
     def emit(self, record: logging.LogRecord) -> None:
-        _ = self._loop.create_task(self._channel.send(record.getMessage()))
+        name = record.name
+        level_name = record.levelname
+        message = f"{name} [{level_name}] {record.getMessage()}"
+        _ = self._loop.create_task(self._channel.send(message))

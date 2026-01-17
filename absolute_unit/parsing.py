@@ -353,7 +353,10 @@ class OperatorType(enum.Enum):
 
 _BINARY_OP_MAP: dict[
     OperatorType,
-    Callable[[PlainQuantity[float], PlainQuantity[float]], PlainQuantity[float]],
+    Callable[
+        [PlainQuantity[float] | float, PlainQuantity[float] | float],
+        PlainQuantity[float] | float,
+    ],
 ] = {
     OperatorType.ADD: operator.add,
     OperatorType.SUB: operator.sub,
@@ -363,7 +366,7 @@ _BINARY_OP_MAP: dict[
 }
 
 _UNARY_OP_MAP: dict[
-    OperatorType, Callable[[PlainQuantity[float]], PlainQuantity[float]]
+    OperatorType, Callable[[PlainQuantity[float] | float], PlainQuantity[float] | float]
 ] = {
     OperatorType.ADD: lambda x: x,
     OperatorType.SUB: lambda x: -x,
@@ -498,7 +501,7 @@ class Expression(abc.ABC):
     def evaluate(
         self,
         ureg: pint.UnitRegistry,
-    ) -> Result[PlainQuantity[float], list[EvaluationError]]:
+    ) -> Result[PlainQuantity[float] | float, list[EvaluationError]]:
         """
         Evaluate this expression with the global UnitRegistry and context settings.
         """
@@ -575,7 +578,7 @@ class Binary(Expression):
     @override
     def evaluate(
         self, ureg: pint.UnitRegistry
-    ) -> Result[PlainQuantity[float], list[EvaluationError]]:
+    ) -> Result[PlainQuantity[float] | float, list[EvaluationError]]:
         op = _BINARY_OP_MAP[self.op]
         errors: list[EvaluationError] = []
 
@@ -592,9 +595,11 @@ class Binary(Expression):
         if errors:
             return Err(errors)
         try:
-            return Ok(op(left.unwrap(), right.unwrap()))
-        except OverflowError:
-            return Err([EvaluationError("Overflow error.", self.span())])
+            left = left.unwrap()
+            right = right.unwrap()
+            return Ok(op(left, right))
+        # except OverflowError:
+        #     return Err([EvaluationError("Overflow error.", self.span())])
         except pint.errors.PintError as e:
             return Err([EvaluationError(str(e), self.span())])
 
@@ -683,7 +688,7 @@ class Unary(Expression):
     @override
     def evaluate(
         self, ureg: pint.UnitRegistry
-    ) -> Result[PlainQuantity[float], list[EvaluationError]]:
+    ) -> Result[PlainQuantity[float] | float, list[EvaluationError]]:
         value = self.value.evaluate(ureg)
         if isinstance(value, Err):
             return value
@@ -769,10 +774,8 @@ class Float(Primary):
         return False
 
     @override
-    def evaluate(
-        self, ureg: pint.UnitRegistry
-    ) -> Result[PlainQuantity[float], list[EvaluationError]]:
-        return Ok(ureg.Quantity(self._value))
+    def evaluate(self, ureg: pint.UnitRegistry) -> Result[float, list[EvaluationError]]:
+        return Ok(self._value)
 
     @override
     def __str__(self) -> str:
@@ -895,7 +898,7 @@ class Group(Expression):
     @override
     def evaluate(
         self, ureg: pint.UnitRegistry
-    ) -> Result[PlainQuantity[float], list[EvaluationError]]:
+    ) -> Result[PlainQuantity[float] | float, list[EvaluationError]]:
         return self.expr.evaluate(ureg)
 
     @override

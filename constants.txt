@@ -1,0 +1,23 @@
+pi = 3.1415926535897932384626433832795028841971693993751
+e = 2.71828182845904523536028747135266249775724709369995
+
+speed_of_light = 299792458 m/s =                                  # since 1983
+planck_constant = 6.62607015e-34 J s = ℎ                          # since May 2019
+elementary_charge = 1.602176634e-19 coulomb = electron            # since May 2019
+avogadro_number = 6.02214076e23                                   # since May 2019
+k = 1.380649e-23 J K^-1 = boltzmann_constant = k_B                # since May 2019
+gravity = 9.80665 m/s^2 = g_0 = g0 = g_n = standard_gravity       # since 1901
+atm = 1.01325e5 Pa = atm = atmosphere                             # since 1954
+
+dirac_constant = ℎ / (2 * π) = ħ = hbar = atomic_unit_of_action = a_u_action
+avogadro_constant = avogadro_number * mol^-1 = N_A
+molar_gas_constant = k * N_A = R
+faraday_constant = e * N_A
+
+newtonian_constant_of_gravitation = 6.67430e-11 m^3/(kg s^2) = _ = gravitational_constant  # (15)
+rydberg_constant = 1.0973731568157e7 * m^-1 = R_∞ = R_inf                                  # (12)
+electron_g_factor = -2.00231930436092 = g_e                                                # (36)
+atomic_mass_constant = 1.66053906892e-27 kg = m_u                                          # (52)
+electron_mass = 9.1093837139e-31 kg = m_e = atomic_unit_of_mass = a_u_mass                 # (28)
+proton_mass = 1.67262192595e-27 kg = m_p                                                   # (52)
+neutron_mass = 1.67492750056e-27 kg = m_n                                                  # (85)
