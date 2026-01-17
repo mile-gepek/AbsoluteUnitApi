@@ -194,11 +194,11 @@ class ConversionCog(commands.Cog):
             quantity_foot = whole * self.bot.ureg.foot  # pyright: ignore[reportUnknownVariableType]
             decimal = magnitude - whole
             quantity_inch = decimal * 12 * self.bot.ureg.inch  # pyright: ignore[reportUnknownVariableType]
-            converted_str = f"{quantity_foot:~P} {quantity_inch:.3g~P}"
+            converted_str = f"{quantity_foot:~P} {quantity_inch:.3g~D}"
         else:
             if converted.units == self.bot.ureg.kph:
                 converted = converted.to("km/h")  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
-            converted_str = f"{converted:.3g~P}"
+            converted_str = f"{converted:.3g~D}"
 
         output += f"`{input}` = `{converted_str}`\n"
 
