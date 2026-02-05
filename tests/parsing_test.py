@@ -35,7 +35,7 @@ from absolute_unit.parsing import (
 )
 
 
-ureg = UnitRegistry()
+ureg = UnitRegistry("units.txt")
 
 
 def float_token(value: float) -> FloatToken:
@@ -75,6 +75,29 @@ left_bracket = ParenToken("[", 0, 0)
 right_bracket = ParenToken("]", 0, 0)
 left_brace = ParenToken("{", 0, 0)
 right_brace = ParenToken("}", 0, 0)
+
+
+def test_preprocess_feet_inch() -> None:
+    # 6'3'''
+    input = "6' 3''"
+    processed = Parser.preprocess_input(input)
+    assert processed == "6ft 3in"
+
+
+def test_preprocess_per_to_div() -> None:
+    input = "6m per s per s"
+    processed = Parser.preprocess_input(input)
+    assert processed == "6m / s / s"
+
+
+def test_preprocess_common_imperial_length_input() -> None:
+    input = "6.3  foot   3.3"
+    processed = Parser.preprocess_input(input)
+    assert processed == "6.3  foot   3.3 inch"
+
+    input = "6.3  foot   3.3 inch"
+    processed = Parser.preprocess_input(input)
+    assert processed == "6.3  foot   3.3 inch"
 
 
 def test_char_stream() -> None:

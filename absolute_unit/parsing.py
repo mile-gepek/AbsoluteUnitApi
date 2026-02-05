@@ -8,6 +8,7 @@ import abc
 import enum
 import operator
 import pint
+import re
 import string
 import rich.repr
 from collections import deque
@@ -1077,6 +1078,24 @@ class Parser:
         self._token: Token | None = None
         self._previous_token: Token | None = None
 
+    @staticmethod
+    def preprocess_input(input: str) -> str:
+        input = input.replace('"', "in")
+        # '' Should have priority as inch, instead of making it `ft ft`
+        input = input.replace("''", "in")
+        input = input.replace("'", "ft")
+
+        input = input.replace(" per ", " / ")
+
+        # Swap any substring similar to `6 foot 3` to `6 foot 3 inch`
+        input = re.sub(
+            r"^(\d+(\.\d+)? *(foot|ft) *\d+(\.\d+)?)$",
+            lambda m: m.group(0) + " inch",
+            input,
+        )
+
+        return input
+
     def parse(self, input: str) -> Result[Expression, list[ParsingError]]:
         """
         Try to parse the given input expression.
@@ -1085,9 +1104,7 @@ class Parser:
         ------
         - List of `ParsingError` for issues when parsing.
         """
-        input = input.replace('"', "in")
-        input = input.replace("''", "in")
-        input = input.replace("'", "ft")
+        input = self.preprocess_input(input)
         tokens = list(tokenize(input))
         result = self._parse_expr(deque(tokens))
         return result
