@@ -14,9 +14,10 @@ metric_to_imperial = {
     "centimeter": "inch",
     "kilogram": "pound",
     "gram": "ounce",
-    "kph": "mph",
+    "kilometer_per_hour": "mile_per_hour",
     "celsius": "fahrenheit",
     "liter": "gallon",
+    "milliliter": "fluid_ounce",
 }
 
 
@@ -25,11 +26,11 @@ imperial_to_metric = {
     "foot": "meter",
     "inch": "centimeter",
     "pound": "kilogram",
-    "mph": "kph",
+    "mile_per_hour": "kilometer_per_hour",
     "fahrenheit": "celsius",
     "gallon": "liter",
     "pint": "liter",
-    "floz": "milliliter",
+    "fluid_ounce": "milliliter",
 }
 
 

@@ -133,7 +133,7 @@ grade = π / 200 * radian = grad = gradian
 steradian = radian ** 2 = sr
 
 # Information
-baud = bit / second = Bd = bps
+bits_per_second = bit / second = Bd = bps = baud 
 
 byte = 8 * bit = B = octet
 
@@ -163,8 +163,8 @@ minute = 60 * second = min
 hour = 60 * minute = h = hr
 day = 24 * hour = d
 week = 7 * day
-fortnight = 2 * week = fortnite
-year = 365.25 * day = a = yr = julian_year
+fortnight = 2 * week = _ = fortnite
+year = 365.25 * day = yr = a = julian_year
 month = year / 12
 decade = 10 * year
 century = 100 * year = _ = centuries
@@ -185,8 +185,7 @@ hectare = 100 * are = ha
 # Volume
 [volume] = [length] ** 3
 liter = decimeter ** 3 = l = L = ℓ = litre
-cubic_centimeter = centimeter ** 3 = cc
-microliter = lambda = λ
+microliter = lambda = _ = λ
 stere = meter ** 3
 
 # Frequency
@@ -199,16 +198,16 @@ cps = count / second
 # Velocity
 [velocity] = [length] / [time]
 [speed] = [velocity]
-knot = nautical_mile / hour = kn = kt = knot_international = international_knot
-mph = mile / hour = MPH = mile_per_hour
-kph = kilometer / hour = KPH = kilometer_per_hour
-kps = kilometer / second = kilometer_per_second
-mps = meter / second = meter_per_second 
-fps = foot / second = foot_per_second 
+knot = nautical_mile / hour = _ = kt = knot_international = international_knot
+mile_per_hour = mile / hour = mph
+kilometer_per_hour = kilometer / hour = kph
+kilometer_per_second = kilometer / second = kps
+meter_per_second = meter / second = mps 
+foot_per_second = foot / second = fps 
 
 # Volumetric Flow Rate
 [volumetric_flow_rate] = [volume] / [time]
-sverdrup = 1e6 * meter ** 3 / second = sv
+sverdrup = 1e6 * meter ** 3 / second = _ = sv
 
 # Force
 [force] = [mass] * [acceleration]
@@ -224,8 +223,8 @@ calorie = 4.184 * joule = cal = thermochemical_calorie = cal_th
 # Power
 [power] = [energy] / [time]
 watt = joule / second = W
-voltampere = volt * ampere = volte_ampere = VA
-horsepower = 550 * foot * force_pound / second = hp = UK_horsepower = hydraulic_horsepower
+voltampere = volt * ampere = volt_ampere = VA
+horsepower = 550 * foot * force_pound / second = hp
 
 # Momentum
 [momentum] = [length] * [mass] / [time]
@@ -237,11 +236,11 @@ horsepower = 550 * foot * force_pound / second = hp = UK_horsepower = hydraulic_
 [pressure] = [force] / [area]
 pascal = newton / meter ** 2 = Pa
 bar = 1e5 * pascal
-psi = force_pound / inch ** 2 = pound_force_per_square_inch
+pound_force_per_square_inch = force_pound / inch ** 2 = psi 
 
 # Torque
 [torque] = [force] * [length]
-ft_lb = foot * force_pound = foot_pound = footpound
+foot_pound = foot * force_pound = footpound = ft_lb
 
 # Viscosity
 [viscosity] = [pressure] * [time]
@@ -291,7 +290,7 @@ lux = lumen / meter ** 2 = lx
 [charge] = [current] * [time]
 coulomb = ampere * second
 faraday = e * N_A * mole
-Ah = ampere * hour = ampere_hour
+ampere_hour = ampere * hour = Ah
 
 # Electric potential
 [electric_potential] = [energy] / [charge]
@@ -300,7 +299,7 @@ volt = joule / coulomb = V
 [electric_field] = [electric_potential] / [length]
 
 [resistance] = [electric_potential] / [current]
-ohm = volt / ampere = Ω
+ohm = volt / ampere = _ = Ω
 
 [resistivity] = [resistance] * [length]
 
@@ -345,7 +344,7 @@ octave = 1 ; logbase: 2; logfactor: 1 = oct
     link = 1e-2 * chain = li = survey_link
     survey_foot = 1200 / 3937 * meter = sft
     fathom = 6 * survey_foot
-    rod = 16.5 * survey_foot = rd = pole = perch
+    rod = 16.5 * survey_foot = pole = perch
     chain = 4 * rod
     furlong = 40 * rod = fur
     cables_length = 120 * fathom
@@ -361,17 +360,17 @@ octave = 1 ; logbase: 2; logfactor: 1 = oct
     quart = gallon / 4
     pint = quart / 2
     minim = pint / 7680
-    fldr = pint / 128 = fl_dr = fluid_dram
-    floz = pint / 16 = fl_oz = fluid_ounce
+    fluid_dram = pint / 128 = fldr = fl_dr
+    fluid_ounce = pint / 16 = floz = fl_oz
     gill = pint / 4
 @end
 
 @group USCSVolumeOther
     teaspoon = fluid_ounce / 6 = tsp
     tablespoon = fluid_ounce / 2 = tbsp
-    shot = 3 * tablespoon = jig = US_shot
-    cup = pint / 2 = cp = liquid_cup = US_liquid_cup
-    barrel = 31.5 * gallon = bbl
+    shot = 3 * tablespoon
+    cup = pint / 2 = cp
+    barrel = 31.5 * gallon
     hogshead = 63 * gallon
 @end
 
