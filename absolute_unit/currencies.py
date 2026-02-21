@@ -110,8 +110,11 @@ def define_exchange_rates(
             continue
         if currency in ureg or currency.lower() in ureg:
             continue
+        # The api gives back rates for converting the base currency into the target one,
+        # so to define the target currency we take the reciprocal
+        reverse_exchange_rate = 1 / exchange_rate
         ureg.define(
-            f"{currency} = {exchange_rate} * {base_currency} = {currency.lower()}"
+            f"{currency} = {reverse_exchange_rate} * {base_currency} = {currency.lower()}"
         )
 
 
