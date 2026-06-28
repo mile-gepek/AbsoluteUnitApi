@@ -3,7 +3,8 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, Response, status
+import rich
+from fastapi import FastAPI, Query, Response, status
 from pint.facets.plain import PlainQuantity
 from pint.util import UnitsContainer
 from pydantic import BaseModel
@@ -78,6 +79,9 @@ async def convert(
         return errors
 
     expression = expression_result.ok()
+
+    rich.print(expression)
+
     evaluation_result = conversion.evaluate_expression(expression, ureg)
     if isinstance(evaluation_result, Err):
         errors.extend(evaluation_result.err())
