@@ -648,7 +648,7 @@ class Binary(Expression):
         yield "left", self.left
         yield "op", self.op.value
         yield "right", self.right
-        yield "implicit", self.implicit, False
+        yield "implicit", self.implicit
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -906,8 +906,8 @@ class Group(Expression):
     @override
     def __str__(self) -> str:
         opening, closing = self.paren_type.to_pair()
-        if isinstance(self.expr, Binary) and self.expr.implicit:
-            return str(self.expr)
+        # if isinstance(self.expr, Binary) and self.expr.implicit:
+        #     return str(self.expr)
         return f"{opening.value}{self.expr}{closing.value}"
 
     @override
