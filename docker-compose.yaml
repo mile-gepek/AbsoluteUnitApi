@@ -1,11 +1,15 @@
-version: "3.9"
-
 services:
-  bot:
-    container_name: AbsoluteUnitBot
+  api:
     build:
       context: .
       dockerfile: Dockerfile
+    restart: unless-stopped
     env_file:
       - .env
-    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: "db"
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - /app/.venv

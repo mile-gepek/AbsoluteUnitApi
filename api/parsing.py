@@ -7,18 +7,17 @@ from __future__ import annotations
 import abc
 import enum
 import operator
-import pint
 import re
 import string
-import rich.repr
 from collections import deque
 from collections.abc import Callable, Generator, Sequence
 from typing import ClassVar, Self, override
 
+import pint
+import rich.repr
 from pint.facets.plain import PlainQuantity
 from pint.util import UnitsContainer
-
-from result import Result, Ok, Err
+from result import Err, Ok, Result
 
 __all__ = [
     "tokenize",
@@ -455,7 +454,8 @@ class UnknownToken(Token):
 
     @override
     @classmethod
-    def repr_name(cls) -> str: ...
+    def repr_name(cls) -> str:
+        raise NotImplementedError
 
 
 def tokenize(s: str) -> Generator[Token, None, None]:
@@ -508,7 +508,8 @@ class Expression(abc.ABC):
         """
 
     @override
-    def __eq__(self, other: object) -> bool: ...
+    def __eq__(self, other: object) -> bool:
+        raise NotImplementedError
 
 
 class Binary(Expression):
@@ -1064,9 +1065,9 @@ def format_errors(errors: Sequence[Error], input_len: int) -> str:
     return "\n".join(error_lines)
 
 
-class ParserMode(enum.Enum):
-    Adaptive = "adaptive"
-    Strict = "strict"
+class ParserMode(enum.StrEnum):
+    Adaptive = enum.auto()
+    Strict = enum.auto()
 
 
 class Parser:

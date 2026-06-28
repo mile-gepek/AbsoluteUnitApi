@@ -4,7 +4,6 @@ version = "0.1.0"
 
 requires-python = ">=3.13"
 dependencies = [
-  "disnake",
   "pint",
   "result",
   "rich",
@@ -12,9 +11,10 @@ dependencies = [
   "pydantic",
   "pydantic-settings",
   "tomlkit",
+  "fastapi[standard]>=0.138.1",
 ]
 
-[project.optional-dependencies]
-test = [
-  "pytest"
+[dependency-groups]
+dev = [
+    "pytest-asyncio>=1.4.0",
 ]

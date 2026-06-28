@@ -1,0 +1,16 @@
+// Project-local debug tasks
+//
+// For more documentation on how to configure debug tasks,
+// see: https://zed.dev/docs/debugger
+[
+  {
+    "label": "Run module 'api'",
+    "adapter": "Debugpy",
+    "mode": "debug",
+    "request": "launch",
+    "name": "Debug API",
+    "module": "api",
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "python": "$ZED_WORKTREE_ROOT/.venv/bin/python",
+  },
+]

@@ -1,12 +1,15 @@
-import time
+from collections.abc import Sequence
+from typing import Annotated
+
 import pint
+from fastapi import Depends
 from pint import UnitRegistry
 from pint.facets.plain import PlainQuantity
 from pint.util import UnitsContainer
+from result import Err, Ok, Result
 
-from result import Result, Ok, Err
-
-from absolute_unit import parsing
+from api import parsing
+from api.parsing import EvaluationError, ParsingError
 
 metric_to_imperial = {
     "kilometer": "mile",
@@ -135,25 +138,23 @@ def parse_input(
     input: str,
     ureg: UnitRegistry,
     mode: parsing.ParserMode = parsing.ParserMode.Adaptive,
-) -> Result[parsing.Expression, str]:
+) -> Result[parsing.Expression, list[ParsingError]]:
     parser = parsing.Parser(ureg, mode)
     parsing_result = parser.parse(input)
     if isinstance(parsing_result, Err):
         errors = parsing_result.err_value
-        errors_formatted = parsing.format_errors(errors, len(input))
-        return Err(errors_formatted)
+        return Err(errors)
     return parsing_result
 
 
 def evaluate_expression(
     expression: parsing.Expression,
     ureg: UnitRegistry,
-) -> Result[PlainQuantity[float], str]:
+) -> Result[PlainQuantity[float], list[EvaluationError]]:
     evaluation_result = expression.evaluate(ureg)
     if isinstance(evaluation_result, Err):
         errors = evaluation_result.err_value
-        errors_formatted = parsing.format_errors(errors, expression.end())
-        return Err(errors_formatted)
+        return Err(errors)
     return evaluation_result.map(ureg.Quantity)
 
 
@@ -166,3 +167,13 @@ def convert(
     except pint.DimensionalityError as e:
         return Err(DimensionalityError(e.dim1, e.dim2))
     return Ok(converted)
+
+
+unit_registry = UnitRegistry(filename="units.txt", autoconvert_offset_to_baseunit=False)
+
+
+async def get_unit_registry() -> UnitRegistry:
+    return unit_registry
+
+
+UnitRegistryDep = Annotated[UnitRegistry, Depends(get_unit_registry)]
