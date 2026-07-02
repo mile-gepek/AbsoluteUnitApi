@@ -12,7 +12,7 @@ from api.conversion import (
     metric_to_imperial,
 )
 
-ureg = UnitRegistry()
+ureg = UnitRegistry(filename="units.txt", autoconvert_offset_to_baseunit=False)
 
 
 def str_to_units_container(units: str) -> UnitsContainer:
