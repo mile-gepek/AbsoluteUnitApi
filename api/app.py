@@ -1,17 +1,17 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Sequence
+from typing import Annotated, Sequence
 
 from fastapi import FastAPI, Query, Response, status
-from pint.facets.plain import PlainQuantity
+from pint.facets.plain import PlainQuantity, PlainUnit
 from pint.util import UnitsContainer
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field, PlainSerializer, computed_field
 from result import Err
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from api import conversion
-from api.conversion import ConversionError, UnitError
+from api.conversion import ConversionError, UnitError, get_unit_registry
 from api.parsing import DimensionalityError, EvaluationError, ParserMode, ParsingError
 
 logger = logging.getLogger(__name__)
@@ -33,9 +33,16 @@ async def health() -> HealthResponse:
     return HealthResponse()
 
 
-class QuantityWrapper(BaseModel):
+def validate_units(value: str | PlainUnit) -> PlainUnit:
+    if isinstance(value, PlainUnit):
+        return value
+    ureg = get_unit_registry()
+    return ureg(value).units
+
+
+class QuantityWrapper(BaseModel, arbitrary_types_allowed=True):
     magnitude: float
-    units: str
+    units: Annotated[PlainUnit, PlainSerializer(str), BeforeValidator(validate_units)]
 
 
 class ConversionResponse(BaseModel):
@@ -123,7 +130,7 @@ async def convert(
     same_unit = evaluated.unit_items() == target_unit.unit_items()
 
     magnitude = converted.magnitude
-    units = str(converted.units)
+    units = converted.units
 
     result = QuantityWrapper(magnitude=magnitude, units=units)
 
