@@ -1,4 +1,5 @@
-from typing import Annotated, Self
+from collections.abc import Sequence
+from typing import Annotated
 
 import pint
 from fastapi import Depends
@@ -38,59 +39,39 @@ imperial_to_metric = {
 }
 
 
-class Error(BaseModel):
-    message: str
-
-    @computed_field
-    def error_type(self) -> str:
-        return self.__class__.__name__
+class Error(Exception):
+    pass
 
 
 class UnitError(Error):
     pass
 
 
-class ConversionError(Error):
+class ConversionError(Exception):
     pass
 
 
-class InvalidTargetUnitError(UnitError):
-    unit: str
+class DimensionalityError(ConversionError):
+    def __init__(
+        self,
+        expression_dimension: UnitsContainer,
+        target_unit_dimension: UnitsContainer,
+    ) -> None:
+        self.expression_dimension = expression_dimension
+        self.target_unit_dimension = target_unit_dimension
+        super().__init__(
+            f"Can not convert expression of dimension '{expression_dimension}' to target dimension '{target_unit_dimension}'"
+        )
 
-    @classmethod
-    def new(cls, unit: str) -> Self:
-        return cls(message=f"Undefined target units: {unit}", unit=unit)
+
+class InvalidUnitError(UnitError):
+    def __init__(self, unit: str) -> None:
+        super().__init__(f"Undefined target units: {unit}")
 
 
 class UnitInferError(UnitError):
-    @classmethod
-    def new(cls) -> Self:
-        return cls(message="Can not infer target unit from expression.")
-
-
-class ConversionDimensionalityError(ConversionError):
-    _dimension_expression: pint.util.UnitsContainer
-    _dimension_target: pint.util.UnitsContainer
-
-    @computed_field
-    def expression_dimension(self) -> str:
-        return str(self._dimension_expression)
-
-    @computed_field
-    def target_unit_dimension(self) -> str:
-        return str(self._dimension_target)
-
-    @classmethod
-    def new(
-        cls,
-        expression_dimension: pint.util.UnitsContainer,
-        target_unit_dimension: pint.util.UnitsContainer,
-    ) -> Self:
-        return cls.model_construct(
-            message=f"Could not convert expression of dimension '{expression_dimension}' to target unit of dimesion '{target_unit_dimension}'",
-            _dimension_expression=expression_dimension,
-            _dimension_target=target_unit_dimension,
-        )
+    def __init__(self) -> None:
+        super().__init__("Can not infer target unit from expression.")
 
 
 def infer_target_unit(
@@ -122,13 +103,13 @@ def infer_target_unit(
     for unit, power in quantity.unit_items():
         if unit in metric_to_imperial:
             if has_imperial:
-                return Err(UnitInferError.new())
+                return Err(UnitInferError())
             has_metric = True
             new_unit = metric_to_imperial[unit]
 
         elif unit in imperial_to_metric:
             if has_metric:
-                return Err(UnitInferError.new())
+                return Err(UnitInferError())
             has_imperial = True
             new_unit = imperial_to_metric[unit]
 
@@ -142,12 +123,12 @@ def infer_target_unit(
 def get_target_unit(
     target: str,
     ureg: UnitRegistry,
-) -> Result[UnitsContainer, InvalidTargetUnitError]:
+) -> Result[UnitsContainer, InvalidUnitError]:
     try:
         unit_quantity = ureg.Quantity(target)
     except pint.errors.UndefinedUnitError as e:
         units = ", ".join(e.unit_names)
-        return Err(InvalidTargetUnitError.new(units))
+        return Err(InvalidUnitError(units))
     unit_items = unit_quantity.unit_items()
     return Ok(UnitsContainer(unit_items))
 
@@ -191,11 +172,11 @@ def evaluate_expression(
 def convert(
     quantity: PlainQuantity[float],
     target_unit: UnitsContainer,
-) -> Result[PlainQuantity[float], ConversionDimensionalityError]:
+) -> Result[PlainQuantity[float], ConversionError]:
     try:
         converted: PlainQuantity[float] = quantity.to(target_unit).to_reduced_units()
     except pint.DimensionalityError:
-        return Err(ConversionDimensionalityError.new(quantity._units, target_unit))
+        return Err(DimensionalityError(quantity._units, target_unit))
     return Ok(converted)
 
 

@@ -87,7 +87,7 @@ async def convert(
     mode: ParserMode = ParserMode.Strict,
 ) -> (
     ConversionResponse
-    | Sequence[ParsingError | ConversionError | UnitError | EvaluationError]
+    | list[ParsingError | ConversionError | UnitError | EvaluationError]
 ):
     errors = []
 
@@ -139,8 +139,7 @@ async def convert(
 
     if isinstance(target_unit_result, Err):
         response.status_code = HTTP_422_UNPROCESSABLE_CONTENT
-        errors.append(target_unit_result.err())
-        return errors
+        return [target_unit_result.err()]
 
     target_unit: UnitsContainer = target_unit_result.ok()
 
@@ -148,8 +147,7 @@ async def convert(
 
     conversion_result = conversion.convert(evaluated, target_unit)
     if isinstance(conversion_result, Err):
-        errors.append(conversion_result.err())
-        return errors
+        return [conversion_result.err()]
     converted = conversion_result.ok()
     last_currency_update = (
         currency_handler.last_currency_update if has_currencies else None
