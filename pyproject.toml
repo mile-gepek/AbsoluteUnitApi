@@ -12,10 +12,10 @@ dependencies = [
   "pydantic-settings",
   "tomlkit",
   "fastapi[standard]>=0.138.1",
+  "httpx2>=2.5.0",
 ]
 
 [dependency-groups]
 dev = [
-    "httpx2>=2.5.0",
     "pytest-asyncio>=1.4.0",
 ]
