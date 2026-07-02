@@ -49,7 +49,7 @@ Configuration is done through a `.env` file for secrets, and a `config.toml` fil
 
 Example:
 ```toml
-debug = False
+debug = false
 
 log_level = "error"
 ```
