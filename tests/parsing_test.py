@@ -2,10 +2,10 @@
 
 from collections import deque
 
+from pint import Quantity, UnitRegistry
 from result import Err, Ok
 
-from pint import Quantity, UnitRegistry
-from absolute_unit.parsing import (
+from api.parsing import (
     Binary,
     CharStream,
     DimensionalityError,
@@ -20,6 +20,7 @@ from absolute_unit.parsing import (
     OperatorType,
     ParenToken,
     ParenType,
+    Parser,
     ParserMode,
     Token,
     Unary,
@@ -30,12 +31,10 @@ from absolute_unit.parsing import (
     UnknownToken,
     UnmatchedParenError,
     Whitespace,
-    Parser,
     tokenize,
 )
 
-
-ureg = UnitRegistry("units.txt")
+ureg = UnitRegistry(filename="units.txt", autoconvert_offset_to_baseunit=False)
 
 
 def float_token(value: float) -> FloatToken:
@@ -43,7 +42,7 @@ def float_token(value: float) -> FloatToken:
 
 
 def float_mock(value: float) -> Float:
-    return Float(value, 0, 0)
+    return Float(value=value, _start=0, _end=0)
 
 
 def unit_token(unit: str) -> UnitToken:
@@ -51,11 +50,11 @@ def unit_token(unit: str) -> UnitToken:
 
 
 def unit_mock(unit: str) -> Unit:
-    return Unit(Quantity(unit), unit, 0, 0)
+    return Unit.model_construct(_unit=Quantity(unit), unit_str=unit, _start=0, _end=0)
 
 
 def unary_mock(op_type: OperatorType, expr: Expression) -> Unary:
-    return Unary(op_type, expr, 0)
+    return Unary(operator=op_type, value=expr, operator_start=0)
 
 
 op_plus = OperatorToken("+", 0, 0)
@@ -66,7 +65,7 @@ op_exp = OperatorToken("**", 0, 0)
 
 
 def group_mock(paren_type: ParenType, expr: Expression) -> Group:
-    return Group(expr, paren_type, 0, 0)
+    return Group.new(paren_type, expr, 0, 0)
 
 
 left_paren = ParenToken("(", 0, 0)
@@ -269,8 +268,8 @@ def test_unary_invalid_unary_error() -> None:
 
 
 def test_binary_dimensionality_error() -> None:
-    left = Float(1.0, 0, 0)
-    right = Unit(Quantity("km"), "km", 0, 0)
+    left = Float.new(1.0, 0, 0)
+    right = Unit.model_construct(_unit=Quantity("km"), unit_str="km", _start=0, _end=0)
     op = OperatorType.ADD
     result = Binary.try_new(left, op, right)
     assert isinstance(result, Err)
@@ -287,11 +286,11 @@ def test_binary_parse() -> None:
     )
     parser = Parser(ureg)
     parsed = parser._parse_expr(tokens)
-    mock_result = Binary(
+    mock_result = Binary.try_new(
         float_mock(4.5),
         OperatorType.ADD,
         float_mock(3.6),
-    )
+    ).unwrap()
     assert isinstance(parsed, Ok)
     assert parsed.ok() == mock_result
     assert not tokens
@@ -356,7 +355,7 @@ def test_parse_group() -> None:
         ]
     )
     parser = Parser(ureg)
-    parsed = parser._parse_group(tokens, tokens.popleft())  # pyright: ignore[reportArgumentType]
+    parsed = parser._parse_group(tokens, tokens.popleft())  # ty:ignore[invalid-argument-type]
     mock_result = float_mock(6.68)
     assert isinstance(parsed, Ok)
     assert parsed.ok() == mock_result
@@ -454,17 +453,17 @@ def test_parse_float_power_float() -> None:
     parser = Parser(ureg)
     parsed = parser._parse_primary_expression(Float, tokens)
     assert isinstance(parsed, Ok)
-    mock_result = Binary(
+    mock_result = Binary.try_new(
         float_mock(4),
         OperatorType.EXP,
         float_mock(2),
-    )
+    ).unwrap()
     assert parsed.ok() == mock_result
     assert not tokens
 
 
 def test_parse_unit_power_float() -> None:
-    tokens: deque[Token] = deque(
+    tokens: deque = deque(
         [
             unit_token("km"),
             op_exp,
@@ -474,11 +473,11 @@ def test_parse_unit_power_float() -> None:
     parser = Parser(ureg)
     parsed = parser._parse_primary_expression(Unit, tokens)
     assert isinstance(parsed, Ok)
-    mock_result = Binary(
+    mock_result = Binary.try_new(
         unit_mock("km"),
         OperatorType.EXP,
         float_mock(2),
-    )
+    ).unwrap()
     assert parsed.ok() == mock_result
     assert not tokens
 
@@ -515,18 +514,18 @@ def test_parse_unit_power_groupexpr() -> None:
     parsed = parser._parse_primary_expression(Unit, tokens)
     assert isinstance(parsed, Ok)
     # mock_result: km ** (1 + 1)
-    mock_result = Binary(
+    mock_result = Binary.try_new(
         unit_mock("km"),
         OperatorType.EXP,
         group_mock(
             ParenType.L_PAREN,
-            Binary(
+            Binary.try_new(
                 float_mock(1),
                 OperatorType.ADD,
                 float_mock(1),
-            ),
+            ).unwrap(),
         ),
-    )
+    ).unwrap()
     assert parsed.ok() == mock_result
     assert not tokens
 
@@ -544,19 +543,19 @@ def test_primary_chain_simple() -> None:
     )
     parser = Parser(ureg)
     parsed = parser._parse_expr(tokens)
-    mock_result = Binary(
-        Binary(
+    mock_result = Binary.try_new(
+        Binary.try_new(
             float_mock(30),
             OperatorType.MUL,
             unit_mock("km"),
-        ),
+        ).unwrap(),
         OperatorType.DIV,
-        Binary(
+        Binary.try_new(
             float_mock(2),
             OperatorType.MUL,
             unit_mock("h"),
-        ),
-    )
+        ).unwrap(),
+    ).unwrap()
     assert isinstance(parsed, Ok)
     assert parsed.ok() == mock_result
     assert not tokens
@@ -583,42 +582,42 @@ def test_primary_chain_complex() -> None:
     )
     parser = Parser(ureg)
     parsed = parser._parse_expr(tokens)
-    mock_result = Binary(
-        Binary(
-            Binary(
-                Binary(
+    mock_result = Binary.try_new(
+        Binary.try_new(
+            Binary.try_new(
+                Binary.try_new(
                     float_mock(1),
                     OperatorType.MUL,
                     unit_mock("km"),
-                ),
+                ).unwrap(),
                 OperatorType.MUL,
                 group_mock(
                     ParenType.L_PAREN,
-                    Binary(
+                    Binary.try_new(
                         float_mock(5),
                         OperatorType.ADD,
                         float_mock(3),
-                    ),
+                    ).unwrap(),
                 ),
-            ),
+            ).unwrap(),
             OperatorType.MUL,
             unit_mock("m"),
-        ),
+        ).unwrap(),
         OperatorType.DIV,
-        Binary(
-            Binary(
+        Binary.try_new(
+            Binary.try_new(
                 float_mock(2),
                 OperatorType.MUL,
                 unit_mock("h"),
-            ),
+            ).unwrap(),
             OperatorType.ADD,
-            Binary(
+            Binary.try_new(
                 float_mock(13),
                 OperatorType.MUL,
                 unit_mock("min"),
-            ),
-        ),
-    )
+            ).unwrap(),
+        ).unwrap(),
+    ).unwrap()
     assert isinstance(parsed, Ok)
     assert parsed.ok() == mock_result
     assert not tokens
@@ -640,23 +639,23 @@ def test_primary_chain_order() -> None:
     parser = Parser(ureg)
     result = parser._parse_expr(tokens)
     assert isinstance(result, Ok)
-    mock_result = Binary(
-        Binary(
+    mock_result = Binary.try_new(
+        Binary.try_new(
             float_mock(1),
             OperatorType.DIV,
-            Binary(
+            Binary.try_new(
                 float_mock(2),
                 OperatorType.EXP,
                 float_mock(3),
-            ),
-        ),
+            ).unwrap(),
+        ).unwrap(),
         OperatorType.MUL,
-        Binary(
+        Binary.try_new(
             unit_mock("cm"),
             OperatorType.EXP,
             float_mock(2),
-        ),
-    )
+        ).unwrap(),
+    ).unwrap()
     assert result.ok() == mock_result
 
 
@@ -696,11 +695,11 @@ def test_parse_strict_mode_implicit_multiplication() -> None:
     )
     result = parser._parse_expr(tokens)
     assert isinstance(result, Ok)
-    mock_result = Binary(
-        Binary(float_mock(6), OperatorType.MUL, unit_mock("km")),
+    mock_result = Binary.try_new(
+        Binary.try_new(float_mock(6), OperatorType.MUL, unit_mock("km")).unwrap(),
         OperatorType.MUL,
         unit_mock("m"),
-    )
+    ).unwrap()
     assert result.ok() == mock_result
 
 
@@ -723,24 +722,28 @@ def test_parse_strict_mode_complex() -> None:
     )
     result = parser._parse_expr(tokens)
     assert isinstance(result, Ok)
-    mock_result = Binary(
-        Binary(
-            Binary(
-                Binary(float_mock(6), OperatorType.MUL, unit_mock("km")),
+    mock_result = Binary.try_new(
+        Binary.try_new(
+            Binary.try_new(
+                Binary.try_new(
+                    float_mock(6), OperatorType.MUL, unit_mock("km")
+                ).unwrap(),
                 OperatorType.MUL,
                 unit_mock("m"),
-            ),
+            ).unwrap(),
             OperatorType.DIV,
             group_mock(
                 ParenType.L_PAREN,
-                Binary(
+                Binary.try_new(
                     unit_mock("m"),
                     OperatorType.ADD,
-                    Binary(float_mock(3), OperatorType.MUL, unit_mock("cm")),
-                ),
+                    Binary.try_new(
+                        float_mock(3), OperatorType.MUL, unit_mock("cm")
+                    ).unwrap(),
+                ).unwrap(),
             ),
-        ),
+        ).unwrap(),
         OperatorType.MUL,
         unit_mock("h"),
-    )
+    ).unwrap()
     assert result.ok() == mock_result
