@@ -160,7 +160,7 @@ class Token(abc.ABC):
         return None
 
     @classmethod
-    def alphabet(cls, curr_token: str) -> str | None:  # pyright: ignore [reportUnusedParameter]
+    def alphabet(cls, curr_token: str) -> str | None:
         """
         Context-dependant alphabet.
         Certain Tokens, such as `OperatorToken`s want to change their alphabet depending on the characters they've already consumed.
@@ -872,7 +872,7 @@ class Unit(Primary):
             )
         if not isinstance(other, Unit):
             return False
-        return self._unit == other._unit  # pyright: ignore [reportReturnType, reportUnknownVariableType]
+        return self._unit == other._unit
 
 
 class Group(Expression):

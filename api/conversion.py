@@ -5,7 +5,7 @@ from fastapi import Depends
 from pint import UnitRegistry
 from pint.facets.plain import PlainQuantity
 from pint.util import UnitsContainer
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, computed_field
 from result import Err, Ok, Result
 
 from api import parsing
@@ -193,8 +193,8 @@ def convert(
     target_unit: UnitsContainer,
 ) -> Result[PlainQuantity[float], ConversionDimensionalityError]:
     try:
-        converted: PlainQuantity[float] = quantity.to(target_unit).to_reduced_units()  # pyright: ignore [reportUnknownVariableType, reportUnknownMemberType]
-    except pint.DimensionalityError as e:
+        converted: PlainQuantity[float] = quantity.to(target_unit).to_reduced_units()
+    except pint.DimensionalityError:
         return Err(ConversionDimensionalityError.new(quantity._units, target_unit))
     return Ok(converted)
 

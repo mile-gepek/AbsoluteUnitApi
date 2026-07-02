@@ -1,5 +1,3 @@
-# pyright: reportPrivateUsage=false
-
 from collections import deque
 
 from pint import Quantity, UnitRegistry

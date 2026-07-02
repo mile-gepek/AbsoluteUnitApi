@@ -1,12 +1,9 @@
+import logging
 from asyncio import Task
 from collections.abc import Sequence
 from datetime import datetime, time
-import logging
 from typing import Annotated, Any
 
-from aiohttp import ClientSession
-import disnake
-from disnake.ext import commands, tasks
 from pint import UnitRegistry
 from pint.util import UnitsContainer
 from pydantic import (
@@ -32,22 +29,22 @@ def clear_ureg_cache(ureg: UnitRegistry, units: Sequence[str]) -> None:
     # ureg should have a cache, but whatever
     if not hasattr(ureg, "_cache"):
         return
-    cache = ureg._cache  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType, reportPrivateUsage]
+    cache = ureg._cache
     for unit in units:
         invalid_root_unit_keys: list[UnitsContainer] = []
-        for key in cache.root_units:  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        for key in cache.root_units:
             if isinstance(key, UnitsContainer) and unit in key:
                 invalid_root_unit_keys.append(key)
         for unit_container in invalid_root_unit_keys:
-            del cache.root_units[unit_container]  # pyright: ignore[reportUnknownMemberType]
+            del cache.root_units[unit_container]
 
         invalid_conversion_keys: list[tuple[UnitsContainer, UnitsContainer]] = []
-        for key in cache.conversion_factor:  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-            left, right = key  # pyright: ignore[reportUnknownVariableType]
+        for key in cache.conversion_factor:
+            left, right = key
             if unit in left or unit in right:
-                invalid_conversion_keys.append(key)  # pyright: ignore[reportUnknownArgumentType]
+                invalid_conversion_keys.append(key)
         for unit_container in invalid_conversion_keys:
-            del cache.conversion_factor[unit_container]  # pyright: ignore[reportUnknownMemberType]
+            del cache.conversion_factor[unit_container]
 
 
 def clear_currencies(ureg: UnitRegistry):
@@ -55,7 +52,7 @@ def clear_currencies(ureg: UnitRegistry):
     If the api removes certain currencies they will be left in the registry.
     This is potentially invalid if a currency's old exchange rate is still stored, but the API doesn't update it.
     """
-    units = ureg._units  # pyright: ignore[reportPrivateUsage]
+    units = ureg._units
     currency_list = [
         name
         for name, definition in units.items()
@@ -65,7 +62,7 @@ def clear_currencies(ureg: UnitRegistry):
         del units[currency]
 
 
-def extract_exchange_rates(currencies: dict[str, Any]) -> dict[str, float]:  # pyright: ignore[reportExplicitAny]
+def extract_exchange_rates(currencies: dict[str, Any]) -> dict[str, float]:
     # The data that currencyapi.com gives is stupid.
     # Example: `{"USD": {"code": "USD", value: 0.789}}`
     # why is this a thing
@@ -90,7 +87,7 @@ async def get_exchange_rates(
             if resp.status != 200:
                 logger.warning(resp.reason)
                 return
-            resp_json = await resp.json()  # pyright: ignore[reportAny]
+            resp_json = await resp.json()
 
     try:
         response_model = CurrencyApiResponse.model_validate(resp_json)

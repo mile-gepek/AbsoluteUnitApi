@@ -6,7 +6,7 @@ from typing import Annotated, Sequence
 from fastapi import FastAPI, Query, Response, status
 from pint.facets.plain import PlainQuantity, PlainUnit
 from pint.util import UnitsContainer
-from pydantic import BaseModel, BeforeValidator, Field, PlainSerializer, computed_field
+from pydantic import BaseModel, BeforeValidator, Field, PlainSerializer
 from result import Err
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
