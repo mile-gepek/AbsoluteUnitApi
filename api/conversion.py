@@ -1,4 +1,3 @@
-from collections.abc import Sequence
 from typing import Annotated
 
 import pint
@@ -6,10 +5,10 @@ from fastapi import Depends
 from pint import UnitRegistry
 from pint.facets.plain import PlainQuantity
 from pint.util import UnitsContainer
-from pydantic import BaseModel, computed_field
 from result import Err, Ok, Result
 
 from api import parsing
+from api.errors import BaseError
 from api.parsing import EvaluationError, ParsingError
 
 metric_to_imperial = {
@@ -39,7 +38,7 @@ imperial_to_metric = {
 }
 
 
-class Error(Exception):
+class Error(BaseError):
     pass
 
 
@@ -47,7 +46,7 @@ class UnitError(Error):
     pass
 
 
-class ConversionError(Exception):
+class ConversionError(Error):
     pass
 
 
@@ -60,18 +59,22 @@ class DimensionalityError(ConversionError):
         self.expression_dimension = expression_dimension
         self.target_unit_dimension = target_unit_dimension
         super().__init__(
-            f"Can not convert expression of dimension '{expression_dimension}' to target dimension '{target_unit_dimension}'"
+            f"Can not convert expression of dimension '{expression_dimension}' to target dimension '{target_unit_dimension}'",
+            "TARGET_UNIT_DIMENSION_ERROR",
         )
 
 
 class InvalidUnitError(UnitError):
     def __init__(self, unit: str) -> None:
-        super().__init__(f"Undefined target units: {unit}")
+        super().__init__(f"Undefined target units: {unit}", "INVALID_UNIT_ERROR")
 
 
 class UnitInferError(UnitError):
     def __init__(self) -> None:
-        super().__init__("Can not infer target unit from expression.")
+        super().__init__(
+            "Can not infer target unit from expression.",
+            "UNIT_INFER_ERROR",
+        )
 
 
 def infer_target_unit(

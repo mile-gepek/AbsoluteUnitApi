@@ -1,9 +1,9 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Annotated, Literal, Sequence
+from typing import Annotated
 
-from fastapi import FastAPI, Query, Response, status
+from fastapi import FastAPI, Query, Request, Response, status
 from fastapi.concurrency import asynccontextmanager
 from pint.facets.plain import PlainQuantity, PlainUnit
 from pint.util import UnitsContainer
@@ -15,18 +15,23 @@ from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 from api import conversion
 from api.config import get_secrets
 from api.conversion import (
-    ConversionError,
-    UnitError,
     get_unit_registry,
     has_different_currencies,
 )
 from api.currencies import CurrencyHandler
-from api.parsing import DimensionalityError, EvaluationError, ParserMode, ParsingError
+from api.errors import BaseError
+from api.parsing import ParserMode
 
 logger = logging.getLogger(__name__)
 
 
 currency_handler = CurrencyHandler()
+
+
+class ConversionExceptionGroup(ExceptionGroup):
+    def __init__(self, message: str, errors: list[BaseError]) -> None:
+        super().__init__(message, errors)
+        self.errors = errors
 
 
 @asynccontextmanager
@@ -41,6 +46,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 app = FastAPI(title="Absolute Unit API", root_path="/api/v1", lifespan=lifespan)
+
+
+@app.exception_handler(ConversionExceptionGroup)
+async def handle_convert_exception_group(
+    request: Request, exceptions: ConversionExceptionGroup
+) -> dict[str, list[dict[str, str]]]:
+    errors = [exception.json() for exception in exceptions.errors]
+    return {"errors": errors}
 
 
 def utc_now() -> datetime:
@@ -72,23 +85,22 @@ class QuantityWrapper(BaseModel, arbitrary_types_allowed=True):
 class ConversionResponse(BaseModel):
     result: QuantityWrapper
     input_interpretation: str
-    last_currency_update: datetime | None = None
+    last_currency_update: datetime | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     input_unit_same_as_target: bool = Field(
-        exclude_if=lambda value: value
+        exclude_if=lambda value: value is None
     )  # Exclude field if False
 
 
-@app.get("/convert", response_model=None)
+@app.get("/convert")
 async def convert(
     response: Response,
     ureg: conversion.UnitRegistryDep,
     user_input: str = Query(alias="input"),
     target_unit: str | None = None,
     mode: ParserMode = ParserMode.Strict,
-) -> (
-    ConversionResponse
-    | list[ParsingError | ConversionError | UnitError | EvaluationError]
-):
+) -> ConversionResponse:
     errors = []
 
     async with asyncio.timeout(2):
@@ -100,8 +112,8 @@ async def convert(
             )
         except TimeoutError:
             response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-            # TODO: should probably return instead of reraising
             raise
+
     if isinstance(expression_result, Err):
         errors.extend(expression_result.err())
         if target_unit is not None:
@@ -113,7 +125,7 @@ async def convert(
                 error = target_unit_result.err()
                 errors.append(error)
         response.status_code = HTTP_422_UNPROCESSABLE_CONTENT
-        return errors
+        raise ConversionExceptionGroup("Errors", errors)
 
     expression = expression_result.ok()
 
@@ -129,7 +141,8 @@ async def convert(
                 error = target_unit_result.err()
                 errors.append(error)
         response.status_code = HTTP_422_UNPROCESSABLE_CONTENT
-        return errors
+        raise ConversionExceptionGroup("Errors", errors)
+
     evaluated: PlainQuantity[float] = evaluation_result.ok().to_reduced_units()
 
     if target_unit is None:
@@ -139,7 +152,7 @@ async def convert(
 
     if isinstance(target_unit_result, Err):
         response.status_code = HTTP_422_UNPROCESSABLE_CONTENT
-        return [target_unit_result.err()]
+        raise ConversionExceptionGroup("Errors", [target_unit_result.err()])
 
     target_unit: UnitsContainer = target_unit_result.ok()
 
@@ -147,7 +160,8 @@ async def convert(
 
     conversion_result = conversion.convert(evaluated, target_unit)
     if isinstance(conversion_result, Err):
-        return [conversion_result.err()]
+        raise ConversionExceptionGroup("Errors", [conversion_result.err()])
+
     converted = conversion_result.ok()
     last_currency_update = (
         currency_handler.last_currency_update if has_currencies else None

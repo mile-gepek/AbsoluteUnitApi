@@ -20,6 +20,8 @@ from pint.util import UnitsContainer
 from pydantic import BaseModel, Field, computed_field
 from result import Err, Ok, Result
 
+from api.errors import BaseError
+
 __all__ = [
     "tokenize",
     "Parser",
@@ -599,7 +601,7 @@ class Binary(Expression):
         # except OverflowError:
         #     return Err([EvaluationError("Overflow error.", self.span())])
         except pint.errors.PintError as e:
-            return Err([EvaluationError(message=str(e), span=self.span)])
+            return Err([EvaluationError(str(e), "EVALUATION ERROR", span=self.span)])
 
     def _as_str(self) -> str:
         """Neatly surrounds the expression with parentheses if it is implicit."""
@@ -944,24 +946,28 @@ class Group(Expression):
         return self.expression == other
 
 
-class Error(Exception):
-    def __init__(self, message: str, span: tuple[int, int] | _EOL = EOL):
-        super().__init__(message)
+class Error(BaseError, abc.ABC):
+    def __init__(self, message: str, code: str, span: tuple[int, int] | _EOL = EOL):
+        super().__init__(message, code)
         self.span: tuple[int, int] | _EOL = span
 
 
-class ParsingError(Error):
+class ParsingError(Error, abc.ABC):
     pass
 
 
 class UnexpectedTokenError(ParsingError):
     def __init__(self, token: Token, *, expected: str) -> None:
-        super().__init__(f"Expected {expected}, got '{token.token}'.", token.span())
+        super().__init__(
+            f"Expected {expected}, got '{token.token}'.",
+            "UNEXPECTED_TOKEN_ERROR",
+            token.span(),
+        )
 
 
 class UnexpectedEolError(ParsingError):
     def __init__(self, expected: str):
-        super().__init__(expected)
+        super().__init__(expected, "UNEXPECTED_END_OF_LINE")
 
 
 def _format_expected(expected_token_types: tuple[type[Token], ...]) -> str:
@@ -978,18 +984,22 @@ def _format_expected(expected_token_types: tuple[type[Token], ...]) -> str:
 class UnmatchedParenError(ParsingError):
     def __init__(self, paren_token: ParenToken):
         name = paren_token.paren_type.paren_name()
-        super().__init__(f"Unmatched {name}.", paren_token.span())
+        super().__init__(
+            f"Unmatched {name}.", "UNMATCHED_PARENTHESIS_ERROR", paren_token.span()
+        )
 
 
 class EmptyGroupExpression(ParsingError):
     def __init__(self, span: tuple[int, int]) -> None:
-        super().__init__("Empty group expression.", span)
+        super().__init__("Empty group expression.", "EMPTY_GROUP_ERROR", span)
 
 
 class InvalidUnaryError(ParsingError):
     def __init__(self, operator_token: OperatorToken) -> None:
         super().__init__(
-            f"Invalid unary operator: {operator_token.token}.", operator_token.span()
+            f"Invalid unary operator: {operator_token.token}.",
+            "INVALID_UNARY_ERROR",
+            operator_token.span(),
         )
 
 
@@ -1002,17 +1012,23 @@ class ExpectedPrimaryError(ParsingError):
     ) -> None:
         if message is None:
             message = "Expected expression."
-        super().__init__(message, span)
+        super().__init__(message, "EXPECTED_PRIMARY_ERROR", span)
 
 
 class UnexpectedPrimaryError(ParsingError):
     def __init__(self, token: Token):
-        super().__init__(f"Expected expression, got: {token.token}.", token.span())
+        super().__init__(
+            f"Expected expression, got: {token.token}.", "PARSING_ERROR", token.span()
+        )
 
 
 class UndefinedUnitError(ParsingError):
     def __init__(self, unit_token: UnitToken) -> None:
-        super().__init__(f"Invalid unit {unit_token.token}", unit_token.span())
+        super().__init__(
+            f"Invalid unit {unit_token.token}",
+            "UNDEFINED_UNIT_ERROR",
+            unit_token.span(),
+        )
 
 
 # Dimensionality errors should be caught during parsing
@@ -1022,6 +1038,7 @@ class DimensionalityError(ParsingError):
         end = right.end()
         super().__init__(
             f"Invalid operation '{op.value}' for expressions with differing dimensions ({left.dimensionality()} {op.value} {right.dimensionality()}).",
+            "DIMENSIONALITY_ERROR",
             span=(start, end),
         )
 
@@ -1030,13 +1047,16 @@ class DimensionalityError(ParsingError):
 
 
 class EvaluationError(Error):
-    pass
+    def __init__(self, message: str, code: str, span: tuple[int, int] | _EOL) -> None:
+        super().__init__(message, code)
+        self.span = span
 
 
 class DivisionByZeroError(ParsingError, EvaluationError):
     def __init__(self, expression: Expression) -> None:
         super().__init__(
             f"Tried dividing by zero (Expression '{expression}' evaluates to 0).",
+            "DIVISION_BY_ZERO_ERROR",
             expression.span,
         )
 
