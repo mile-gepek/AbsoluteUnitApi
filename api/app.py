@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, Query, Request, Response, status
 from fastapi.concurrency import asynccontextmanager
+from fastapi.responses import JSONResponse
 from pint.facets.plain import PlainQuantity, PlainUnit
 from pint.util import UnitsContainer
 from pydantic import BaseModel, BeforeValidator, Field, PlainSerializer
@@ -51,9 +52,9 @@ app = FastAPI(title="Absolute Unit API", root_path="/api/v1", lifespan=lifespan)
 @app.exception_handler(ConversionExceptionGroup)
 async def handle_convert_exception_group(
     request: Request, exceptions: ConversionExceptionGroup
-) -> dict[str, list[dict[str, str]]]:
+) -> JSONResponse:
     errors = [exception.json() for exception in exceptions.errors]
-    return {"errors": errors}
+    return JSONResponse(status_code=422, content={"errors": errors})
 
 
 def utc_now() -> datetime:
