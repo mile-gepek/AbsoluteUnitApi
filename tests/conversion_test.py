@@ -1,16 +1,15 @@
+import pytest
 from pint import UnitRegistry
 from pint.util import UnitsContainer
-import pytest
 from result import Err, Ok
 
-
-from absolute_unit.conversion import (
-    DimensionalityError,
-    metric_to_imperial,
+from api.conversion import (
+    ConversionDimensionalityError,
+    UnitInferError,
+    convert,
     imperial_to_metric,
     infer_target_unit,
-    convert,
-    UnitInferError,
+    metric_to_imperial,
 )
 
 ureg = UnitRegistry()
@@ -108,4 +107,4 @@ def test_convert_expression_dimensionality_mismatch(src_unit: str, target_unit: 
 
     assert isinstance(result, Err)
     error = result.err()
-    assert isinstance(error, DimensionalityError)
+    assert isinstance(error, ConversionDimensionalityError)
