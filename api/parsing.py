@@ -23,6 +23,7 @@ from result import Err, Ok, Result
 __all__ = [
     "tokenize",
     "Parser",
+    "ParserMode",
     "Error",
     "ParsingError",
     "EvaluationError",
