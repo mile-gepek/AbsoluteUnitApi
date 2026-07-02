@@ -202,7 +202,7 @@ def convert(
 unit_registry = UnitRegistry(filename="units.txt", autoconvert_offset_to_baseunit=False)
 
 
-async def get_unit_registry() -> UnitRegistry:
+def get_unit_registry() -> UnitRegistry:
     return unit_registry
 
 
