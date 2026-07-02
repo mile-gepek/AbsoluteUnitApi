@@ -3,10 +3,8 @@
 # Parsing
 The expression parser has 2 modes of function:
 
-- Adapative
-The adaptive parsing tries to make the bot easier to use for common use cases by interpreting implicit operations differently based on the expression's dimensionality.
-- Strict
-Strict parsing treats any implicit operation as multiplication, excluding  number expressions next to each other.
+- Adapative - The adaptive parsing tries to make the API easier for common everyday use cases by interpreting implicit operations differently based on the expression's dimensionality.
+- Strict - Strict parsing treats any implicit operation as multiplication, excluding  number expressions next to each other.
 
 ## Rules for adaptive parsing
 These rules are definitely not perfect, possibly leading to odd interpretations.\

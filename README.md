@@ -4,7 +4,9 @@ AbsoluteUnit is a API for converting arbitrary measurement units, powered by [pi
 
 ## Features
 
-* A parser built to handle input adaptively (e.g. intepreting `5ft 9in` as `5*ft + 9*in`), an explanation can be found in the PARSING.md file.
+* A parser built with two modes:
+  * Strict (the default) - Strict PEMDAS rules, concatenation is always multiplication.
+  * Adaptive - Attempts to handle expressions like common english language (e.g. intepreting `5ft 9in` as `5*ft + 9*in`), an explanation can be found in the PARSING.md file.
 * Arbitrary unit conversion, with a huge set of units available by default.
 * Currency conversion via [currencyapi](https://currencyapi.com) when [configured](#configuration) with an API key, exchange rates refreshed every 24 hours.
 
@@ -26,11 +28,18 @@ pip install .
 
 ### Running
 
-After installing the dependencies and [configuring](#configuration), run the bot with
+After installing the dependencies and [configuring](#configuration), run the API with
 ```sh
-python -m absolute_unit
+python -m api
 ```
 
+#### Running with docker
+The project includes a small docker compose configuration, which can be started using
+```sh
+docker compose up --build api -d
+```
+
+The `api` service also restarts after reboot, unless stopped manually.
 
 ## Configuration
 Configuration is done through a `.env` file for secrets, and a `config.toml` file for general configuration.
@@ -38,7 +47,7 @@ Configuration is done through a `.env` file for secrets, and a `config.toml` fil
 ### .env
 | Key | Description | Optional |
 | :-- | :-- | :-:  |
-| CURRENCY_API_TOKEN | The currencyapi token.<br>Currency conversion will be disabled if the token is not found. | Yes |
+| CURRENCY_API_TOKEN | The currencyapi token.<br>Currency conversion will be disabled if the token is not found, and currencies will be treated as unknown unit errors. | Yes |
 
 ### config.toml
 
