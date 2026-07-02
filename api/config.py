@@ -11,7 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Secrets(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    currency_api_token: str
+    currency_api_token: str | None = None
 
 
 class LogLevel(StrEnum):
