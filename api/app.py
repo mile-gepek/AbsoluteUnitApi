@@ -1,13 +1,13 @@
 import asyncio
-import datetime
 import logging
-from typing import Any, Sequence
+from datetime import datetime, timezone
+from typing import Sequence
 
 import rich
 from fastapi import FastAPI, Query, Response, status
 from pint.facets.plain import PlainQuantity
 from pint.util import UnitsContainer
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from result import Err
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -20,10 +20,18 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Absolute Unit API", root_path="/api/v1")
 
 
-@app.get("/test")
-async def test(event_id: int = Query(default=42, alias="id")) -> dict[str, Any]:
-    logger.info("AAAAAA")
-    return {"id": event_id}
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class HealthResponse(BaseModel):
+    status: str = "ok"
+    timestamp: datetime = Field(default_factory=utc_now)
+
+
+@app.get("/health")
+async def health() -> HealthResponse:
+    return HealthResponse()
 
 
 class QuantityWrapper(BaseModel):
@@ -34,7 +42,7 @@ class QuantityWrapper(BaseModel):
 class ConversionResponse(BaseModel):
     result: QuantityWrapper
     input_interpretation: str
-    last_currency_update: datetime.datetime
+    last_currency_update: datetime
     input_unit_same_as_target: bool
 
 
@@ -125,7 +133,7 @@ async def convert(
     return ConversionResponse(
         result=result,
         input_interpretation=str(expression),
-        last_currency_update=datetime.datetime.now(),
+        last_currency_update=datetime.now(),
         input_unit_same_as_target=same_unit,
     )
 
