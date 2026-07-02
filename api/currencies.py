@@ -1,9 +1,9 @@
+import asyncio
 import logging
-from asyncio import Task
-from collections.abc import Sequence
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from typing import Annotated, Any
 
+from httpx2 import AsyncClient
 from pint import UnitRegistry
 from pint.util import UnitsContainer
 from pydantic import (
@@ -15,12 +15,11 @@ from pydantic import (
 )
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 midnight = time(0, 0, 0)
 
 
-def clear_ureg_cache(ureg: UnitRegistry, units: Sequence[str]) -> None:
+def clear_ureg_cached_currencies(ureg: UnitRegistry) -> None:
     """
     The current version of pint has a bug where redefining units does not clear their cached ratios.
 
@@ -30,21 +29,20 @@ def clear_ureg_cache(ureg: UnitRegistry, units: Sequence[str]) -> None:
     if not hasattr(ureg, "_cache"):
         return
     cache = ureg._cache
-    for unit in units:
-        invalid_root_unit_keys: list[UnitsContainer] = []
-        for key in cache.root_units:
-            if isinstance(key, UnitsContainer) and unit in key:
-                invalid_root_unit_keys.append(key)
-        for unit_container in invalid_root_unit_keys:
-            del cache.root_units[unit_container]
+    invalid_root_unit_keys: set[UnitsContainer] = set()
+    for dimension, units in cache.dimensional_equivalents.items():
+        if isinstance(dimension, UnitsContainer) and "currency" in dimension:
+            invalid_root_unit_keys |= set(units)
+    for unit_container in invalid_root_unit_keys:
+        del cache.root_units[unit_container]
 
-        invalid_conversion_keys: list[tuple[UnitsContainer, UnitsContainer]] = []
-        for key in cache.conversion_factor:
-            left, right = key
-            if unit in left or unit in right:
-                invalid_conversion_keys.append(key)
-        for unit_container in invalid_conversion_keys:
-            del cache.conversion_factor[unit_container]
+    invalid_conversion_keys: set[tuple[UnitsContainer, UnitsContainer]] = set()
+    for dimension in cache.conversion_factor:
+        left, right = dimension
+        if left in invalid_root_unit_keys or right in invalid_root_unit_keys:
+            invalid_conversion_keys.add(dimension)
+    for unit_container in invalid_conversion_keys:
+        del cache.conversion_factor[unit_container]
 
 
 def clear_currencies(ureg: UnitRegistry):
@@ -79,15 +77,14 @@ class CurrencyApiResponse(BaseModel):
 
 
 async def get_exchange_rates(
-    currencyapi_session: ClientSession, base_currency: str
+    client: AsyncClient, base_currency: str
 ) -> CurrencyApiResponse | None:
-    async with currencyapi_session as session:
-        params = {"base_currency": base_currency}
-        async with session.get("latest", params=params) as resp:
-            if resp.status != 200:
-                logger.warning(resp.reason)
-                return
-            resp_json = await resp.json()
+    params = {"base_currency": base_currency}
+    response = await client.get("latest", params=params)
+    if response.status_code != 200:
+        logger.warning(response.reason_phrase)
+        return
+    resp_json = response.json()
 
     try:
         response_model = CurrencyApiResponse.model_validate(resp_json)
@@ -96,67 +93,50 @@ async def get_exchange_rates(
         logger.info(f'Call to currencyapi endpoint "latest" is missing key: "{e}"')
 
 
-def define_exchange_rates(
-    ureg: UnitRegistry, base_currency: str, exchange_rates: dict[str, float]
-) -> None:
-    clear_ureg_cache(ureg, tuple(exchange_rates.keys()))
-    clear_currencies(ureg)
-    ureg.define(f"{base_currency} = [currency] = {base_currency.lower()}")
-    for currency, exchange_rate in exchange_rates.items():
-        if currency == base_currency:
-            continue
-        if currency in ureg or currency.lower() in ureg:
-            continue
-        # The api gives back rates for converting the base currency into the target one,
-        # so to define the target currency we take the reciprocal
-        reverse_exchange_rate = 1 / exchange_rate
-        ureg.define(
-            f"{currency} = {reverse_exchange_rate} * {base_currency} = {currency.lower()}"
-        )
+def seconds_until_midnight() -> float:
+    now = datetime.now()
+    target = datetime.combine(now.date(), midnight)
+    if target <= now:
+        target += timedelta(days=1)
+    return (target - now).total_seconds()
 
 
-class CurrencyCog(commands.Cog):
-    def __init__(
+class CurrencyHandler:
+    last_currency_update: datetime
+
+    def start_currency_task(
         self,
-        disnake_client: disnake.Client,
-        api_key: str,
+        currencyapi_token: str,
         ureg: UnitRegistry,
-        # euros because Europe is better
         base_currency: str = "EUR",
-    ):
-        self._disnake_client: disnake.Client = disnake_client
-        self._api_key: str = api_key
-        self._last_refresh_datetime: datetime | None = None
-        self._ureg: UnitRegistry = ureg
-        self.base_currency: str = base_currency
-        headers = {"apikey": api_key}
-        self.currencyapi_session: ClientSession = ClientSession(
-            loop=disnake_client.loop,
-            base_url="https://api.currencyapi.com/v3/",
-            headers=headers,
-        )
-        logger.info("Starting currency exchange rate refresh task.")
-        self.refresh_task: Task[None] = self.refresh_currency_exchange_rates.start()
+    ) -> asyncio.Task[None]:
+        async def current_task_impl():
+            async with AsyncClient(
+                base_url="https://api.currencyapi.com/v3",
+                headers={"apikey": currencyapi_token},
+            ) as client:
+                while True:
+                    response = await client.get(
+                        "/latest",
+                        params={"base_currency": base_currency},
+                    )
+                    if response.status_code != 200:
+                        clear_ureg_cached_currencies(ureg)
 
-    @property
-    def last_refresh_datetime(self) -> datetime | None:
-        return self._last_refresh_datetime
+                    validated_response = CurrencyApiResponse(**response.json())
+                    clear_currencies(ureg)
+                    clear_ureg_cached_currencies(ureg)
+                    ureg.define(
+                        f"{base_currency.upper()} = [currency] = {base_currency.capitalize()} = {base_currency.lower()}"
+                    )
+                    for currency, ratio_to_base in validated_response.data.items():
+                        if currency != base_currency:
+                            ureg.define(
+                                f"{currency.upper()} = {ratio_to_base} * {base_currency} = {currency.capitalize()} = {currency.lower()}"
+                            )
+                    self.last_currency_update = validated_response.last_updated_at
 
-    @tasks.loop(time=midnight)
-    async def refresh_currency_exchange_rates(self) -> None:
-        await self._refresh_impl()
+                    await asyncio.sleep(seconds_until_midnight())
 
-    async def _refresh_impl(self) -> None:
-        response = await get_exchange_rates(
-            self.currencyapi_session,
-            self.base_currency,
-        )
-        if response is None:
-            return
-        self._last_refresh_datetime = response.last_updated_at
-        define_exchange_rates(self._ureg, self.base_currency, response.data)
-
-    @refresh_currency_exchange_rates.before_loop
-    async def before(self) -> None:
-        await self._refresh_impl()
-        await self._disnake_client.wait_until_ready()
+        task = asyncio.create_task(current_task_impl())
+        return task

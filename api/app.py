@@ -1,22 +1,46 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Annotated, Sequence
+from typing import Annotated, Literal, Sequence
 
 from fastapi import FastAPI, Query, Response, status
+from fastapi.concurrency import asynccontextmanager
 from pint.facets.plain import PlainQuantity, PlainUnit
 from pint.util import UnitsContainer
 from pydantic import BaseModel, BeforeValidator, Field, PlainSerializer
+from pytest_asyncio.plugin import AsyncGenerator
 from result import Err
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from api import conversion
-from api.conversion import ConversionError, UnitError, get_unit_registry
+from api.config import get_secrets
+from api.conversion import (
+    ConversionError,
+    UnitError,
+    get_unit_registry,
+    has_different_currencies,
+)
+from api.currencies import CurrencyHandler
 from api.parsing import DimensionalityError, EvaluationError, ParserMode, ParsingError
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Absolute Unit API", root_path="/api/v1")
+
+currency_handler = CurrencyHandler()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    secrets = get_secrets()
+    ureg = get_unit_registry()
+
+    if secrets.currency_api_token is not None:
+        task = currency_handler.start_currency_task(secrets.currency_api_token, ureg)
+        yield
+    task.cancel()
+
+
+app = FastAPI(title="Absolute Unit API", root_path="/api/v1", lifespan=lifespan)
 
 
 def utc_now() -> datetime:
@@ -48,8 +72,10 @@ class QuantityWrapper(BaseModel, arbitrary_types_allowed=True):
 class ConversionResponse(BaseModel):
     result: QuantityWrapper
     input_interpretation: str
-    last_currency_update: datetime
-    input_unit_same_as_target: bool
+    last_currency_update: datetime | None = None
+    input_unit_same_as_target: bool = Field(
+        exclude_if=lambda value: value
+    )  # Exclude field if False
 
 
 @app.get("/convert", response_model=None)
@@ -64,8 +90,6 @@ async def convert(
     | Sequence[ParsingError | ConversionError | UnitError | EvaluationError]
 ):
     errors = []
-
-    error = DimensionalityError
 
     async with asyncio.timeout(2):
         try:
@@ -120,11 +144,16 @@ async def convert(
 
     target_unit: UnitsContainer = target_unit_result.ok()
 
+    has_currencies = has_different_currencies(ureg, evaluated, target_unit)
+
     conversion_result = conversion.convert(evaluated, target_unit)
     if isinstance(conversion_result, Err):
         errors.append(conversion_result.err())
         return errors
     converted = conversion_result.ok()
+    last_currency_update = (
+        currency_handler.last_currency_update if has_currencies else None
+    )
 
     # result = f"{converted:.3g~D}"
     same_unit = evaluated.unit_items() == target_unit.unit_items()
@@ -137,9 +166,6 @@ async def convert(
     return ConversionResponse(
         result=result,
         input_interpretation=str(expression),
-        last_currency_update=datetime.now(),
+        last_currency_update=last_currency_update,
         input_unit_same_as_target=same_unit,
     )
-
-
-print("a")
