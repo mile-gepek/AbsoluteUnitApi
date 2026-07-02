@@ -6,7 +6,7 @@ AbsoluteUnit is a API for converting arbitrary measurement units, powered by [pi
 
 * A parser built with two modes:
   * Strict (the default) - Strict PEMDAS rules, concatenation is always multiplication.
-  * Adaptive - Attempts to handle expressions like common english language (e.g. intepreting `5ft 9in` as `5*ft + 9*in`), an explanation can be found in the PARSING.md file.
+  * Adaptive - Attempts to handle expressions like common english language (e.g. intepreting `5ft 9in` as `5*ft + 9*in`), an explanation can be found in the [PARSING.md](https://github.com/mile-gepek/AbsoluteUnitApi/blob/master/PARSING.md) file.
 * Arbitrary unit conversion, with a huge set of units available by default.
 * Currency conversion via [currencyapi](https://currencyapi.com) when [configured](#configuration) with an API key, exchange rates refreshed every 24 hours.
 
