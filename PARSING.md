@@ -10,7 +10,7 @@ Strict parsing treats any implicit operation as multiplication, excluding  numbe
 
 ## Rules for adaptive parsing
 These rules are definitely not perfect, possibly leading to odd interpretations.\
-Because of this, the `convert` command features a verbose mode which will print out the interpreted expression for debugging purposes.\
+Because of this, the `convert` endpoint includes the final intepretation of the expression in the response.\
 I hope the system is good enough for everyday use, and suggestions are always welcome.
 
 Regular mathematical expressions should work like expected, if you run into any issues with that, please submit an issue.
