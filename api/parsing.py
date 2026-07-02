@@ -1076,22 +1076,25 @@ class Parser:
         self._previous_token: Token | None = None
 
     @staticmethod
-    def preprocess_input(input: str) -> str:
-        input = input.replace('"', "in")
+    def preprocess_input(input_string: str) -> str:
+        input_string = input_string.replace('"', "in")
         # '' Should have priority as inch, instead of making it `ft ft`
-        input = input.replace("''", "in")
-        input = input.replace("'", "ft")
+        input_string = input_string.replace("''", "in")
+        input_string = input_string.replace("'", "ft")
 
-        input = input.replace(" per ", " / ")
+        input_string = input_string.replace(" per ", " / ")
+
+        input_string = input_string.replace('"', "")
+        input_string = input_string.replace("'", "")
 
         # Swap any substring similar to `6 foot 3` to `6 foot 3 inch`
-        input = re.sub(
+        input_string = re.sub(
             r"^(\d+(\.\d+)? *(foot|ft) *\d+(\.\d+)?)$",
             lambda m: m.group(0) + " inch",
-            input,
+            input_string,
         )
 
-        return input
+        return input_string
 
     def parse(self, input: str) -> Result[Expression, list[ParsingError]]:
         """
