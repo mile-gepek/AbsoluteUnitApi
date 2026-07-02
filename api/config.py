@@ -45,7 +45,7 @@ class Config(BaseModel):
 
 
 config = Config.get_config()
-secrets = Secrets()  # ty:ignore[missing-argument]
+secrets = Secrets()
 
 
 def get_config() -> Config:
