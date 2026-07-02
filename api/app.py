@@ -3,7 +3,6 @@ import logging
 from datetime import datetime, timezone
 from typing import Sequence
 
-import rich
 from fastapi import FastAPI, Query, Response, status
 from pint.facets.plain import PlainQuantity
 from pint.util import UnitsContainer
@@ -86,8 +85,6 @@ async def convert(
         return errors
 
     expression = expression_result.ok()
-
-    rich.print(expression)
 
     evaluation_result = conversion.evaluate_expression(expression, ureg)
     if isinstance(evaluation_result, Err):
