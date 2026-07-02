@@ -745,7 +745,7 @@ class Float(Primary):
 
     @classmethod
     def new(cls, value: float, start: int, end: int) -> Self:
-        return cls(value=value, _start=start, _end=end)
+        return cls.model_construct(value=value, _start=start, _end=end)
 
     @override
     @classmethod
