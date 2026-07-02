@@ -1084,8 +1084,8 @@ class Parser:
 
         input_string = input_string.replace(" per ", " / ")
 
-        input_string = input_string.replace('"', "")
-        input_string = input_string.replace("'", "")
+        input_string = input_string.strip('"')
+        input_string = input_string.strip("'")
 
         # Swap any substring similar to `6 foot 3` to `6 foot 3 inch`
         input_string = re.sub(
