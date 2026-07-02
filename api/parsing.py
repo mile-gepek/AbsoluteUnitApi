@@ -10,19 +10,19 @@ import operator
 import re
 import string
 from collections import deque
-from collections.abc import Callable, Generator, Sequence
+from collections.abc import Callable, Generator
 from typing import ClassVar, Self, overload, override
 
 import pint
 import rich.repr
 from pint.facets.plain import PlainQuantity
 from pint.util import UnitsContainer
+from pydantic import BaseModel, Field, computed_field
 from result import Err, Ok, Result
 
 __all__ = [
     "tokenize",
     "Parser",
-    "format_errors",
     "Error",
     "ParsingError",
     "EvaluationError",
@@ -31,7 +31,7 @@ __all__ = [
 ]
 
 
-class _EOL:
+class _EOL(BaseModel):
     """
     Marker for end-of-line token/expression spans.
 
@@ -472,7 +472,7 @@ def tokenize(s: str) -> Generator[Token, None, None]:
             yield token
 
 
-class Expression(abc.ABC):
+class Expression(abc.ABC, BaseModel):
     @abc.abstractmethod
     def start(self) -> int:
         """
@@ -487,14 +487,16 @@ class Expression(abc.ABC):
         """
         # TODO: Expressions (and tokens) currently don't hold a reference to the input string, this should be changed.
 
-    def span(self) -> tuple[int, int]:
-        """
-        Returns a tuple of the start and end of the expression.
-        """
+    @property
+    def span(self) -> tuple[int, int] | _EOL:
         return (self.start(), self.end())
 
     @abc.abstractmethod
     def dimensionality(self) -> pint.util.UnitsContainer: ...
+
+    @computed_field(alias="dimension")
+    def _dimensionality_string(self) -> str:
+        return str(self.dimensionality())
 
     @abc.abstractmethod
     def is_unit(self) -> bool: ...
@@ -514,20 +516,12 @@ class Expression(abc.ABC):
 
 
 class Binary(Expression):
-    def __init__(
-        self,
-        left: Expression,
-        op: OperatorType,
-        right: Expression,
-        *,
-        implicit: bool = False,
-    ) -> None:
-        self.left: Expression = left
-        self.right: Expression = right
-        self.op: OperatorType = op
+    left: Expression
+    right: Expression
+    operator: OperatorType
 
-        self.implicit: bool = implicit
-        """Whether this operation is implicit e.g. `5km`."""
+    implicit: bool
+    """Whether this operation is implicit e.g. `5km`."""
 
     @classmethod
     def try_new(
@@ -548,10 +542,10 @@ class Binary(Expression):
             or op == OperatorType.EXP
             and right.is_unit()
         ):
-            return Err(DimensionalityError(left, op, right))
+            return Err(DimensionalityError.new(left, op, right))
         elif op == OperatorType.DIV and isinstance(right, Float) and right.value == 0:
-            return Err(DivisionByZeroError(right))
-        return Ok(cls(left, op, right, implicit=implicit))
+            return Err(DivisionByZeroError.new(right))
+        return Ok(cls(left=left, operator=op, right=right, implicit=implicit))
 
     @override
     def start(self) -> int:
@@ -563,7 +557,7 @@ class Binary(Expression):
 
     @override
     def dimensionality(self) -> pint.util.UnitsContainer:
-        match self.op:
+        match self.operator:
             case OperatorType.MUL:
                 return self.left.dimensionality() * self.right.dimensionality()
             case OperatorType.DIV:
@@ -582,7 +576,7 @@ class Binary(Expression):
     def evaluate(
         self, ureg: pint.UnitRegistry
     ) -> Result[PlainQuantity[float] | float, list[EvaluationError]]:
-        op = _BINARY_OP_MAP[self.op]
+        op = _BINARY_OP_MAP[self.operator]
         errors: list[EvaluationError] = []
 
         left = self.left.evaluate(ureg)
@@ -592,8 +586,8 @@ class Binary(Expression):
         if isinstance(right, Err):
             errors.extend(right.err())
 
-        elif self.op == OperatorType.DIV and right.ok() == 0:
-            errors.append(DivisionByZeroError(self.right))
+        elif self.operator == OperatorType.DIV and right.ok() == 0:
+            errors.append(DivisionByZeroError.new(self.right))
 
         if errors:
             return Err(errors)
@@ -604,7 +598,7 @@ class Binary(Expression):
         # except OverflowError:
         #     return Err([EvaluationError("Overflow error.", self.span())])
         except pint.errors.PintError as e:
-            return Err([EvaluationError(str(e), self.span())])
+            return Err([EvaluationError(message=str(e), span=self.span)])
 
     def _as_str(self) -> str:
         """Neatly surrounds the expression with parentheses if it is implicit."""
@@ -627,7 +621,7 @@ class Binary(Expression):
         if (
             isinstance(self.left, Float)
             and self.right.is_unit()
-            and self.op == OperatorType.MUL
+            and self.operator == OperatorType.MUL
             and self.implicit
         ):
             if isinstance(self.right, Unit):
@@ -635,19 +629,19 @@ class Binary(Expression):
             else:
                 s = f"{left} {right}"
         elif self.left.is_unit() and self.right.is_unit():
-            s = f"{left}{self.op.value}{right}"
+            s = f"{left}{self.operator.value}{right}"
         else:
-            s = f"{left} {self.op.value} {right}"
+            s = f"{left} {self.operator.value} {right}"
 
         return s
 
     @override
     def __repr__(self) -> str:
-        return f"Binary({self.op.value} ({self.left!r}, {self.right!r}))"
+        return f"Binary({self.operator.value} ({self.left!r}, {self.right!r}))"
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield "left", self.left
-        yield "op", self.op.value
+        yield "op", self.operator.value
         yield "right", self.right
         yield "implicit", self.implicit
 
@@ -661,20 +655,19 @@ class Binary(Expression):
             return False
         return (
             self.left == other.left
-            and self.op == other.op
+            and self.operator == other.operator
             and self.right == other.right
         )
 
 
 class Unary(Expression):
-    def __init__(self, op: OperatorType, value: Expression, start: int) -> None:
-        self.value: Expression = value
-        self.op: OperatorType = op
-        self._start: int = start
+    value: Expression
+    operator: OperatorType
+    operator_start: int
 
     @override
     def start(self) -> int:
-        return self._start
+        return self.operator_start
 
     @override
     def end(self) -> int:
@@ -695,19 +688,19 @@ class Unary(Expression):
         value = self.value.evaluate(ureg)
         if isinstance(value, Err):
             return value
-        op = _UNARY_OP_MAP[self.op]
+        op = _UNARY_OP_MAP[self.operator]
         return Ok(op(value.ok()))
 
     @override
     def __str__(self) -> str:
-        return f"{self.op.value}{self.value}"
+        return f"{self.operator.value}{self.value}"
 
     @override
     def __repr__(self) -> str:
-        return f"Unary({self.op}{self.value!r})"
+        return f"Unary({self.operator}{self.value!r})"
 
     def __rich_repr__(self) -> rich.repr.Result:
-        yield "op", self.op.value
+        yield "op", self.operator.value
         yield "value", self.value
 
     @override
@@ -718,15 +711,14 @@ class Unary(Expression):
             )
         if not isinstance(other, Unary):
             return False
-        return self.value == other.value and self.op == other.op
+        return self.value == other.value and self.operator == other.operator
 
 
 class Primary(Expression, abc.ABC):
-    token_type: ClassVar[type]
+    _token_type: ClassVar[type]
 
-    def __init__(self, start: int, end: int) -> None:
-        self._start: int = start
-        self._end: int = end
+    _start: int
+    _end: int
 
     @classmethod
     @abc.abstractmethod
@@ -747,26 +739,30 @@ class Primary(Expression, abc.ABC):
 
 
 class Float(Primary):
-    token_type: ClassVar[type] = FloatToken
+    _token_type: ClassVar[type] = FloatToken
 
-    def __init__(self, value: float, start: int, end: int) -> None:
-        super().__init__(start, end)
-        self._value: float = value
+    value: float
+
+    @classmethod
+    def new(cls, value: float, start: int, end: int) -> Self:
+        return cls(value=value, _start=start, _end=end)
 
     @override
     @classmethod
     def from_token(
-        cls, token: Token, ureg: pint.UnitRegistry
+        cls,
+        token: Token,
+        ureg: pint.UnitRegistry,
     ) -> Result[Self, ParsingError]:
+        start = token.start
+        end = token.end
         match token:
             case FloatToken():
-                return Ok(cls(token.to_float(), *token.span()))
+                return Ok(
+                    cls.model_construct(value=token.to_float(), _start=start, _end=end)
+                )
             case _:
-                return Err(UnexpectedTokenError(token, expected="number"))
-
-    @property
-    def value(self) -> float:
-        return self._value
+                return Err(UnexpectedTokenError.new(token, expected="number"))
 
     @override
     def dimensionality(self) -> pint.util.UnitsContainer:
@@ -778,17 +774,17 @@ class Float(Primary):
 
     @override
     def evaluate(self, ureg: pint.UnitRegistry) -> Result[float, list[EvaluationError]]:
-        return Ok(self._value)
+        return Ok(self.value)
 
     @override
     def __str__(self) -> str:
-        if self._value.is_integer():
-            return str(int(self._value))
-        return str(self._value)
+        if self.value.is_integer():
+            return str(int(self.value))
+        return str(self.value)
 
     @override
     def __repr__(self) -> str:
-        return f"Float({self._value})"
+        return f"Float({self.value})"
 
     def __rich_repr__(self) -> rich.repr.Result:
         yield self.value
@@ -801,22 +797,18 @@ class Float(Primary):
             )
         match other:
             case Float():
-                return self._value == other._value
+                return self.value == other.value
             case float():
-                return self._value == other
+                return self.value == other
             case _:
                 return False
 
 
 class Unit(Primary):
-    token_type: ClassVar[type] = UnitToken
+    _token_type: ClassVar[type] = UnitToken
 
-    def __init__(
-        self, unit: PlainQuantity[float], as_str: str, start: int, end: int
-    ) -> None:
-        super().__init__(start, end)
-        self.unit: PlainQuantity[float] = unit
-        self._as_str: str = as_str
+    _unit: PlainQuantity[float]
+    unit_str: str = Field(serialization_alias="unit")
 
     @classmethod
     def try_new(
@@ -825,8 +817,15 @@ class Unit(Primary):
         try:
             unit = ureg.Quantity(unit_token.token)
         except pint.UndefinedUnitError:
-            return Err(UndefinedUnitError(unit_token))
-        return Ok(cls(unit, unit_token.token, unit_token.start, unit_token.end))
+            return Err(UndefinedUnitError.new(unit_token))
+        return Ok(
+            cls.model_construct(
+                _unit=unit,
+                unit_str=unit_token.token,
+                _start=unit_token.start,
+                _end=unit_token.end,
+            )
+        )
 
     @override
     @classmethod
@@ -837,11 +836,11 @@ class Unit(Primary):
             case UnitToken():
                 return cls.try_new(token, ureg)
             case _:
-                return Err(UnexpectedTokenError(token, expected="number"))
+                return Err(UnexpectedTokenError.new(token, expected="number"))
 
     @override
     def dimensionality(self) -> pint.util.UnitsContainer:
-        return self.unit.dimensionality
+        return self._unit.dimensionality
 
     @override
     def is_unit(self) -> bool:
@@ -851,18 +850,18 @@ class Unit(Primary):
     def evaluate(
         self, ureg: pint.UnitRegistry
     ) -> Result[PlainQuantity[float], list[EvaluationError]]:
-        return Ok(self.unit)
+        return Ok(self._unit)
 
     @override
     def __str__(self) -> str:
-        return self._as_str
+        return self.unit_str
 
     @override
     def __repr__(self) -> str:
-        return f"Unit({self.unit})"
+        return f"Unit({self._unit})"
 
     def __rich_repr__(self) -> rich.repr.Result:
-        yield self._as_str
+        yield self.unit_str
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -872,15 +871,29 @@ class Unit(Primary):
             )
         if not isinstance(other, Unit):
             return False
-        return self.unit == other.unit  # pyright: ignore [reportReturnType, reportUnknownVariableType]
+        return self._unit == other._unit  # pyright: ignore [reportReturnType, reportUnknownVariableType]
 
 
 class Group(Expression):
-    def __init__(self, expr: Expression, paren_type: ParenType, start: int, end: int):
-        self.paren_type: ParenType = paren_type
-        self.expr: Expression = expr
-        self._start: int = start
-        self._end: int = end
+    paren_type: ParenType = Field(serialization_alias="type")
+    expression: Expression
+    _start: int
+    _end: int
+
+    @classmethod
+    def new(
+        cls,
+        paren_type: ParenType,
+        expression: Expression,
+        start: int,
+        end: int,
+    ) -> Self:
+        return cls.model_construct(
+            paren_type=paren_type,
+            expression=expression,
+            _start=start,
+            _end=end,
+        )
 
     @override
     def start(self) -> int:
@@ -892,32 +905,32 @@ class Group(Expression):
 
     @override
     def dimensionality(self) -> pint.util.UnitsContainer:
-        return self.expr.dimensionality()
+        return self.expression.dimensionality()
 
     @override
     def is_unit(self) -> bool:
-        return self.expr.is_unit()
+        return self.expression.is_unit()
 
     @override
     def evaluate(
         self, ureg: pint.UnitRegistry
     ) -> Result[PlainQuantity[float] | float, list[EvaluationError]]:
-        return self.expr.evaluate(ureg)
+        return self.expression.evaluate(ureg)
 
     @override
     def __str__(self) -> str:
         opening, closing = self.paren_type.to_pair()
         # if isinstance(self.expr, Binary) and self.expr.implicit:
         #     return str(self.expr)
-        return f"{opening.value}{self.expr}{closing.value}"
+        return f"{opening.value}{self.expression}{closing.value}"
 
     @override
     def __repr__(self) -> str:
         opening, closing = self.paren_type.to_pair()
-        return f"Group({opening.value}{self.expr!r}{closing.value})"
+        return f"Group({opening.value}{self.expression!r}{closing.value})"
 
     def __rich_repr__(self) -> rich.repr.Result:
-        yield self.expr
+        yield self.expression
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -926,14 +939,17 @@ class Group(Expression):
                 f"Can not compare {self.__class__.__qualname__} and {other.__class__.__qualname__}"
             )
         if isinstance(other, Group):
-            return self.expr == other.expr
-        return self.expr == other
+            return self.expression == other.expression
+        return self.expression == other
 
 
-class Error(Exception):
-    def __init__(self, message: str, span: tuple[int, int] | _EOL = EOL):
-        super().__init__(message)
-        self.span: tuple[int, int] | _EOL = span
+class Error(BaseModel):
+    message: str
+    span: tuple[int, int] | _EOL = EOL
+
+    @computed_field
+    def error_type(self) -> str:
+        return self.__class__.__name__
 
 
 class ParsingError(Error):
@@ -941,13 +957,18 @@ class ParsingError(Error):
 
 
 class UnexpectedTokenError(ParsingError):
-    def __init__(self, token: Token, *, expected: str) -> None:
-        super().__init__(f"Expected {expected}, got '{token.token}'.", token.span())
+    @classmethod
+    def new(cls, token: Token, *, expected: str) -> Self:
+        return cls(
+            message=f"Expected {expected}, got '{token.token}'.",
+            span=token.span(),
+        )
 
 
 class UnexpectedEolError(ParsingError):
-    def __init__(self, expected: str):
-        super().__init__(expected)
+    @classmethod
+    def new(cls, expected: str) -> Self:
+        return cls(message=expected)
 
 
 def _format_expected(expected_token_types: tuple[type[Token], ...]) -> str:
@@ -962,52 +983,70 @@ def _format_expected(expected_token_types: tuple[type[Token], ...]) -> str:
 
 
 class UnmatchedParenError(ParsingError):
-    def __init__(self, paren_token: ParenToken):
+    @classmethod
+    def new(cls, paren_token: ParenToken) -> Self:
         name = paren_token.paren_type.paren_name()
-        super().__init__(f"Unmatched {name}.", paren_token.span())
+        return cls(message=f"Unmatched {name}.", span=paren_token.span())
 
 
 class EmptyGroupExpression(ParsingError):
-    def __init__(self, span: tuple[int, int]) -> None:
-        super().__init__("Empty group expression.", span)
+    @classmethod
+    def new(cls, span: tuple[int, int]) -> Self:
+        return cls(message="Empty group expression.", span=span)
 
 
 class InvalidUnaryError(ParsingError):
-    def __init__(self, operator_token: OperatorToken) -> None:
-        super().__init__(
-            f"Invalid unary operator: {operator_token.token}.", operator_token.span()
+    @classmethod
+    def new(cls, operator_token: OperatorToken) -> Self:
+        return cls(
+            message=f"Invalid unary operator: {operator_token.token}.",
+            span=operator_token.span(),
         )
 
 
 class ExpectedPrimaryError(ParsingError):
-    def __init__(
-        self,
+    @classmethod
+    def new(
+        cls,
         *,
         message: str | None = None,
         span: tuple[int, int] | _EOL = EOL,
-    ) -> None:
+    ) -> Self:
         if message is None:
             message = "Expected expression."
-        super().__init__(message, span)
+        return cls(message=message, span=span)
 
 
 class UnexpectedPrimaryError(ParsingError):
-    def __init__(self, token: Token):
-        super().__init__(f"Expected expression, got: {token.token}.", token.span())
+    @classmethod
+    def new(cls, token: Token) -> Self:
+        return cls(
+            message=f"Expected expression, got: {token.token}.",
+            span=token.span(),
+        )
 
 
 class UndefinedUnitError(ParsingError):
-    def __init__(self, unit_token: UnitToken) -> None:
-        super().__init__(f"Invalid unit {unit_token.token}", unit_token.span())
+    @classmethod
+    def new(cls, unit_token: UnitToken) -> Self:
+        return cls(message=f"Invalid unit '{unit_token.token}'", span=unit_token.span())
 
 
 # Dimensionality errors should be caught during parsing
 class DimensionalityError(ParsingError):
-    def __init__(self, left: Expression, op: OperatorType, right: Expression) -> None:
+    left: Expression
+    operator: OperatorType
+    right: Expression
+
+    @classmethod
+    def new(cls, left: Expression, op: OperatorType, right: Expression) -> Self:
         start = left.start()
         end = right.end()
-        super().__init__(
-            f"Invalid operation '{op.value}' for expressions with differing dimensions ({left.dimensionality()} {op.value} {right.dimensionality()}).",
+        return cls(
+            left=left,
+            operator=op,
+            right=right,
+            message=f"Invalid operation '{op.value}' for expressions with differing dimensions ({left.dimensionality()} {op.value} {right.dimensionality()}).",
             span=(start, end),
         )
 
@@ -1020,50 +1059,12 @@ class EvaluationError(Error):
 
 
 class DivisionByZeroError(ParsingError, EvaluationError):
-    def __init__(self, expression: Expression) -> None:
-        super().__init__(
-            f"Tried dividing by zero (Expression '{expression}' evaluates to 0).",
-            expression.span(),
+    @classmethod
+    def new(cls, expression: Expression) -> Self:
+        return cls(
+            message=f"Tried dividing by zero (Expression '{expression}' evaluates to 0).",
+            span=expression.span,
         )
-
-
-def format_errors(errors: Sequence[Error], input_len: int) -> str:
-    """
-    Formats a list of errors (from parsing or evaluating) into "error lines" to be added to the output embed.
-
-    Error lines consists of padding, ^ characters, padding, and finally the message of the error.
-
-    Examples of error lines.
-    ------------------------
-    ```
-    "    ^^^         Division by zero (Expression: ..)"
-    ```
-
-    ```
-    "          ^ Expected expression."
-    ```
-    """
-    error_lines: list[str] = []
-    if any(isinstance(e.span, _EOL) for e in errors):
-        # Accounts for extra padding to show errors at the end of input (expected expressions and so on).
-        line_length = input_len + 3
-    else:
-        line_length = input_len + 1
-
-    for error in errors[:5]:
-        if isinstance(error.span, _EOL):
-            start, end = input_len + 1, input_len + 2
-        else:
-            start, end = error.span
-        line = " " * start
-        line += "^" * (end - start)
-        line += " " * (line_length - end)
-        line += str(error)
-        error_lines.append(line)
-    if len(errors) > 5:
-        leftover = len(errors) - 5
-        error_lines.append(" " * line_length + f"And {leftover} more errors.")
-    return "\n".join(error_lines)
 
 
 class ParserMode(enum.StrEnum):
@@ -1116,11 +1117,11 @@ class Parser:
     ) -> Result[T, UnexpectedTokenError | UnexpectedEolError]:
         if not tokens:
             expected_str = _format_expected(expected)
-            return Err(UnexpectedEolError(expected=expected_str))
+            return Err(UnexpectedEolError.new(expected=expected_str))
         token = tokens[0]
         if not isinstance(token, expected):
             expected_str = _format_expected(expected)
-            return Err(UnexpectedTokenError(token, expected=expected_str))
+            return Err(UnexpectedTokenError.new(token, expected=expected_str))
         return Ok(token)
 
     def _eat_token[T: Token](
@@ -1218,7 +1219,7 @@ class Parser:
             op_type = None
             if isinstance(token, UnknownToken):
                 expected = "operator or group expression"
-                error_group.append(UnexpectedTokenError(token, expected=expected))
+                error_group.append(UnexpectedTokenError.new(token, expected=expected))
                 self._bump(tokens)
             elif isinstance(token, OperatorToken):
                 if token.op_type not in ops:
@@ -1257,7 +1258,7 @@ class Parser:
                     and right_val.value == 0
                     and op_type == OperatorType.DIV
                 ):
-                    error_group.append(DivisionByZeroError(right_val))
+                    error_group.append(DivisionByZeroError.new(right_val))
                 elif isinstance(term, Ok):
                     match Binary.try_new(term.ok(), op_type, right_val):
                         case Err(err) if isinstance(err, DimensionalityError):
@@ -1317,18 +1318,18 @@ class Parser:
 
             if isinstance(token, UnknownToken):
                 self._bump(tokens)
-                return Err([UnexpectedTokenError(token, expected="expression")])
+                return Err([UnexpectedTokenError.new(token, expected="expression")])
             if not isinstance(token, OperatorToken):
                 value = self._parse_mul(tokens)
                 if isinstance(value, Err):
                     return value
                 break
             if token.op_type not in _UNARY_OP_MAP:
-                return Err([InvalidUnaryError(token)])
+                return Err([InvalidUnaryError.new(token)])
             self._bump(tokens)
             op_list.append(token)
         else:
-            return Err([ExpectedPrimaryError()])
+            return Err([ExpectedPrimaryError.new()])
 
         if not op_list:
             return value
@@ -1336,7 +1337,7 @@ class Parser:
         value = value.unwrap()
         while op_list:
             op = op_list.pop()
-            value = Unary(op.op_type, value, op.start)
+            value = Unary(operator=op.op_type, value=value, operator_start=op.start)
         return Ok(value)
 
     def _parse_primary(
@@ -1362,7 +1363,7 @@ class Parser:
             - See `_parse_primary_chain`.
         """
         if not tokens:
-            return Err([ExpectedPrimaryError()])
+            return Err([ExpectedPrimaryError.new()])
 
         token_res = self._eat_token(tokens, (ParenToken,))
         if isinstance(token_res, Ok):
@@ -1373,7 +1374,7 @@ class Parser:
         self, tokens: deque[Token]
     ) -> Result[Primary | Group, list[ParsingError]]:
         if not tokens:
-            return Err([ExpectedPrimaryError()])
+            return Err([ExpectedPrimaryError.new()])
         token_res = self._eat_token(tokens, (ParenToken, FloatToken, UnitToken))
         if isinstance(token_res, Err):
             return Err([token_res.err()])
@@ -1382,7 +1383,7 @@ class Parser:
         if isinstance(token, ParenToken):
             return self._parse_group(tokens, token)
         elif isinstance(token, FloatToken):
-            return Ok(Float(token.to_float(), *token.span()))
+            return Ok(Float.new(token.to_float(), *token.span()))
         else:
             res = Unit.from_token(token, self.ureg)
             if isinstance(res, Ok):
@@ -1407,7 +1408,7 @@ class Parser:
             - Returned when the first paren is not an opening one, or when the opening paren isn't closed.
         """
         if not opening_pair.paren_type.is_opening():
-            return Err([UnmatchedParenError(opening_pair)])
+            return Err([UnmatchedParenError.new(opening_pair)])
 
         group_tokens: deque[Token] = deque()
         pairs_open = 1
@@ -1426,7 +1427,7 @@ class Parser:
                 break
             group_tokens.append(token)
         else:
-            return Err([UnmatchedParenError(opening_pair)])
+            return Err([UnmatchedParenError.new(opening_pair)])
 
         closing_pair = token
         if not group_tokens:
@@ -1434,7 +1435,7 @@ class Parser:
             end = closing_pair.end
             if start == end:
                 end += 1
-            return Err([EmptyGroupExpression(span=(start, end))])
+            return Err([EmptyGroupExpression.new(span=(start, end))])
 
         # Since groups get parsed without any context of  the outer expression,
         # they can raise errors EOL errors even when it's not actually the end of the expression.
@@ -1456,11 +1457,11 @@ class Parser:
             return expr
 
         return Ok(
-            Group(
-                expr.unwrap(),
-                opening_pair.paren_type,
-                opening_pair.start,
-                closing_pair.end,
+            Group.new(
+                expression=expr.unwrap(),
+                paren_type=opening_pair.paren_type,
+                start=opening_pair.start,
+                end=closing_pair.end,
             )
         )
 
@@ -1544,7 +1545,10 @@ class Parser:
                     curr_subexpr = unit
                 else:
                     curr_subexpr = Binary(
-                        curr_subexpr, OperatorType.MUL, unit, implicit=True
+                        left=curr_subexpr,
+                        operator=OperatorType.MUL,
+                        right=unit,
+                        implicit=True,
                     )
 
                 previous_unit = unit
@@ -1617,7 +1621,7 @@ class Parser:
             return Err([op_res.err()])
         op = op_res.ok()
 
-        assert isinstance(op, primary.token_type)
+        assert isinstance(op, primary._token_type)
         token_type = type(op)
 
         if exp:
@@ -1655,7 +1659,7 @@ class Parser:
                     )
                     continue
                 elif isinstance(right_token, FloatToken):
-                    right = Float(right_token.to_float(), *right_token.span())
+                    right = Float.new(right_token.to_float(), *right_token.span())
                 else:
                     right_res = self._parse_group(tokens, right_token)
                     if isinstance(right_res, Err):
@@ -1683,7 +1687,7 @@ class Parser:
                 and right.value == 0
                 and op.op_type == OperatorType.DIV
             ):
-                error_group.append(DivisionByZeroError(right))
+                error_group.append(DivisionByZeroError.new(right))
             elif isinstance(term, Ok):
                 term = Ok(
                     Binary.try_new(term.ok(), op.op_type, right).expect(

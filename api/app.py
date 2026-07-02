@@ -1,7 +1,7 @@
+import asyncio
 import datetime
 import logging
-from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import Any, Sequence
 
 import rich
 from fastapi import FastAPI, Query, Response, status
@@ -13,7 +13,7 @@ from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from api import conversion
 from api.conversion import ConversionError, UnitError
-from api.parsing import EvaluationError, ParserMode, ParsingError
+from api.parsing import DimensionalityError, EvaluationError, ParserMode, ParsingError
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class QuantityWrapper(BaseModel):
 
 class ConversionResponse(BaseModel):
     result: QuantityWrapper
-    expression: str
+    input_interpretation: str
     last_currency_update: datetime.datetime
     input_unit_same_as_target: bool
 
@@ -47,20 +47,19 @@ async def convert(
     mode: ParserMode = ParserMode.Strict,
 ) -> (
     ConversionResponse
-    | list[ParsingError | ConversionError | UnitError | EvaluationError]
+    | Sequence[ParsingError | ConversionError | UnitError | EvaluationError]
 ):
     errors = []
 
-    with ThreadPoolExecutor(1) as executor:
-        future = executor.submit(
-            lambda: conversion.parse_input(
+    error = DimensionalityError
+
+    async with asyncio.timeout(2):
+        try:
+            expression_result = conversion.parse_input(
                 user_input,
                 ureg,
                 mode,
             )
-        )
-        try:
-            expression_result = future.result(timeout=2)
         except TimeoutError:
             response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
             # TODO: should probably return instead of reraising
@@ -104,13 +103,15 @@ async def convert(
 
     if isinstance(target_unit_result, Err):
         response.status_code = HTTP_422_UNPROCESSABLE_CONTENT
-        return [target_unit_result.err()]
+        errors.append(target_unit_result.err())
+        return errors
 
     target_unit: UnitsContainer = target_unit_result.ok()
 
     conversion_result = conversion.convert(evaluated, target_unit)
     if isinstance(conversion_result, Err):
-        return [conversion_result.err()]
+        errors.append(conversion_result.err())
+        return errors
     converted = conversion_result.ok()
 
     # result = f"{converted:.3g~D}"
@@ -123,7 +124,10 @@ async def convert(
 
     return ConversionResponse(
         result=result,
-        expression=str(expression),
+        input_interpretation=str(expression),
         last_currency_update=datetime.datetime.now(),
         input_unit_same_as_target=same_unit,
     )
+
+
+print("a")

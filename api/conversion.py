@@ -1,11 +1,11 @@
-from collections.abc import Sequence
-from typing import Annotated
+from typing import Annotated, Self
 
 import pint
 from fastapi import Depends
 from pint import UnitRegistry
 from pint.facets.plain import PlainQuantity
 from pint.util import UnitsContainer
+from pydantic import BaseModel, Field, computed_field
 from result import Err, Ok, Result
 
 from api import parsing
@@ -38,29 +38,59 @@ imperial_to_metric = {
 }
 
 
-class UnitError(Exception):
+class Error(BaseModel):
+    message: str
+
+    @computed_field
+    def error_type(self) -> str:
+        return self.__class__.__name__
+
+
+class UnitError(Error):
     pass
 
 
-class ConversionError(Exception):
+class ConversionError(Error):
     pass
 
 
-class DimensionalityError(ConversionError):
-    def __init__(self, dim_1: str, dim_2: str) -> None:
-        super().__init__(
-            f"Mismatched dimensionalities between input `{dim_1}` and target `{dim_2}`"
-        )
+class InvalidTargetUnitError(UnitError):
+    unit: str
 
-
-class InvalidUnitError(UnitError):
-    def __init__(self, unit: str) -> None:
-        super().__init__(f"Undefined target units: {unit}")
+    @classmethod
+    def new(cls, unit: str) -> Self:
+        return cls(message=f"Undefined target units: {unit}", unit=unit)
 
 
 class UnitInferError(UnitError):
-    def __init__(self) -> None:
-        super().__init__("Can not infer target unit from expression.")
+    @classmethod
+    def new(cls) -> Self:
+        return cls(message="Can not infer target unit from expression.")
+
+
+class ConversionDimensionalityError(ConversionError):
+    _dimension_expression: pint.util.UnitsContainer
+    _dimension_target: pint.util.UnitsContainer
+
+    @computed_field
+    def expression_dimension(self) -> str:
+        return str(self._dimension_expression)
+
+    @computed_field
+    def target_unit_dimension(self) -> str:
+        return str(self._dimension_target)
+
+    @classmethod
+    def new(
+        cls,
+        expression_dimension: pint.util.UnitsContainer,
+        target_unit_dimension: pint.util.UnitsContainer,
+    ) -> Self:
+        return cls.model_construct(
+            message=f"Could not convert expression of dimension '{expression_dimension}' to target unit of dimesion '{target_unit_dimension}'",
+            _dimension_expression=expression_dimension,
+            _dimension_target=target_unit_dimension,
+        )
 
 
 def infer_target_unit(
@@ -92,13 +122,13 @@ def infer_target_unit(
     for unit, power in quantity.unit_items():
         if unit in metric_to_imperial:
             if has_imperial:
-                return Err(UnitInferError())
+                return Err(UnitInferError.new())
             has_metric = True
             new_unit = metric_to_imperial[unit]
 
         elif unit in imperial_to_metric:
             if has_metric:
-                return Err(UnitInferError())
+                return Err(UnitInferError.new())
             has_imperial = True
             new_unit = imperial_to_metric[unit]
 
@@ -112,12 +142,12 @@ def infer_target_unit(
 def get_target_unit(
     target: str,
     ureg: UnitRegistry,
-) -> Result[UnitsContainer, InvalidUnitError]:
+) -> Result[UnitsContainer, InvalidTargetUnitError]:
     try:
         unit_quantity = ureg.Quantity(target)
     except pint.errors.UndefinedUnitError as e:
         units = ", ".join(e.unit_names)
-        return Err(InvalidUnitError(units))
+        return Err(InvalidTargetUnitError.new(units))
     unit_items = unit_quantity.unit_items()
     return Ok(UnitsContainer(unit_items))
 
@@ -161,11 +191,11 @@ def evaluate_expression(
 def convert(
     quantity: PlainQuantity[float],
     target_unit: UnitsContainer,
-) -> Result[PlainQuantity[float], ConversionError]:
+) -> Result[PlainQuantity[float], ConversionDimensionalityError]:
     try:
         converted: PlainQuantity[float] = quantity.to(target_unit).to_reduced_units()  # pyright: ignore [reportUnknownVariableType, reportUnknownMemberType]
     except pint.DimensionalityError as e:
-        return Err(DimensionalityError(e.dim1, e.dim2))
+        return Err(ConversionDimensionalityError.new(quantity._units, target_unit))
     return Ok(converted)
 
 
