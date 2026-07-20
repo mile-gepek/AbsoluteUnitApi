@@ -4,7 +4,7 @@ from pint.util import UnitsContainer
 from result import Err, Ok
 
 from api.conversion import (
-    ConversionDimensionalityError,
+    DimensionalityError,
     UnitInferError,
     convert,
     imperial_to_metric,
@@ -107,4 +107,4 @@ def test_convert_expression_dimensionality_mismatch(src_unit: str, target_unit: 
 
     assert isinstance(result, Err)
     error = result.err()
-    assert isinstance(error, ConversionDimensionalityError)
+    assert isinstance(error, DimensionalityError)
