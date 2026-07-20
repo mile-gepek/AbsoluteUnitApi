@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     if secrets.currency_api_token is not None:
         task = currency_handler.start_currency_task(secrets.currency_api_token, ureg)
         yield
-    task.cancel()
+        task.cancel()
 
 
 app = FastAPI(title="Absolute Unit API", root_path="/api/v1", lifespan=lifespan)
