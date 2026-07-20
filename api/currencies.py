@@ -45,17 +45,19 @@ def clear_ureg_cached_currencies(ureg: UnitRegistry) -> None:
         del cache.conversion_factor[unit_container]
 
 
-def clear_currencies(ureg: UnitRegistry):
+def clear_currencies(ureg: UnitRegistry, base_currency: str):
     """
     If the api removes certain currencies they will be left in the registry.
     This is potentially invalid if a currency's old exchange rate is still stored, but the API doesn't update it.
     """
     units = ureg._units
-    currency_list = [
-        name
-        for name, definition in units.items()
-        if definition.reference == "[currency]"
-    ]
+    currency_list = []
+    for name, definition in units.items():
+        if (
+            definition.reference in ("[currency]", base_currency)
+            and name not in currency_list
+        ):
+            currency_list.append(name)
     for currency in currency_list:
         del units[currency]
 
@@ -73,7 +75,10 @@ class CurrencyApiResponse(BaseModel):
     last_updated_at: datetime = Field(
         validation_alias=AliasPath("meta", "last_updated_at")
     )
-    data: Annotated[dict[str, float], BeforeValidator(extract_exchange_rates)]
+    exchange_rates_to_base: Annotated[
+        dict[str, float], BeforeValidator(extract_exchange_rates)
+    ] = Field(alias="data")
+    base_currency: str
 
 
 async def get_exchange_rates(
@@ -91,6 +96,21 @@ async def get_exchange_rates(
         return response_model
     except ValidationError as e:
         logger.info(f'Call to currencyapi endpoint "latest" is missing key: "{e}"')
+
+
+def set_ureg_exchange_rates(
+    ureg: UnitRegistry,
+    base_currency: str,
+    exchange_rates: dict[str, float],
+):
+    ureg.define(
+        f"{base_currency.upper()} = [currency] = {base_currency.capitalize()} = {base_currency.lower()}"
+    )
+    for currency, ratio_to_base in exchange_rates.items():
+        if currency != base_currency:
+            ureg.define(
+                f"{currency.upper()} = {ratio_to_base} * {base_currency} = {currency.capitalize()} = {currency.lower()}"
+            )
 
 
 def seconds_until_midnight() -> float:
@@ -123,17 +143,14 @@ class CurrencyHandler:
                     if response.status_code != 200:
                         clear_ureg_cached_currencies(ureg)
 
-                    validated_response = CurrencyApiResponse(**response.json())
-                    clear_currencies(ureg)
-                    clear_ureg_cached_currencies(ureg)
-                    ureg.define(
-                        f"{base_currency.upper()} = [currency] = {base_currency.capitalize()} = {base_currency.lower()}"
+                    validated_response = CurrencyApiResponse(
+                        **response.json(), base_currency=base_currency
                     )
-                    for currency, ratio_to_base in validated_response.data.items():
-                        if currency != base_currency:
-                            ureg.define(
-                                f"{currency.upper()} = {ratio_to_base} * {base_currency} = {currency.capitalize()} = {currency.lower()}"
-                            )
+                    clear_currencies(ureg, base_currency)
+                    clear_ureg_cached_currencies(ureg)
+                    set_ureg_exchange_rates(
+                        ureg, base_currency, validated_response.exchange_rates_to_base
+                    )
                     self.last_currency_update = validated_response.last_updated_at
 
                     await asyncio.sleep(seconds_until_midnight())

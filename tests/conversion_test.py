@@ -20,7 +20,9 @@ def str_to_units_container(units: str, ureg: UnitRegistry) -> UnitsContainer:
 
 
 @pytest.mark.parametrize("metric, imperial", list(metric_to_imperial.items()))
-def test_infer_target_unit_metric_to_imperial(metric: str, imperial: str, ureg: UnitRegistry):
+def test_infer_target_unit_metric_to_imperial(
+    metric: str, imperial: str, ureg: UnitRegistry
+):
     qty = ureg(metric)
     result = infer_target_unit(qty, ureg)
 
@@ -30,7 +32,9 @@ def test_infer_target_unit_metric_to_imperial(metric: str, imperial: str, ureg: 
 
 
 @pytest.mark.parametrize("imperial, metric", list(imperial_to_metric.items()))
-def test_infer_target_unit_imperial_to_metric(imperial: str, metric: str, ureg: UnitRegistry):
+def test_infer_target_unit_imperial_to_metric(
+    imperial: str, metric: str, ureg: UnitRegistry
+):
     qty = ureg(imperial)
     result = infer_target_unit(qty, ureg)
 
@@ -98,7 +102,9 @@ def test_convert(src_unit: str, expected_unit: str, ureg: UnitRegistry):
         ("second", "pound"),  # time -> mass
     ],
 )
-def test_convert_expression_dimensionality_mismatch(src_unit: str, target_unit: str, ureg: UnitRegistry):
+def test_convert_expression_dimensionality_mismatch(
+    src_unit: str, target_unit: str, ureg: UnitRegistry
+):
     qty = ureg(src_unit)
     target = str_to_units_container(target_unit, ureg)
     result = convert(qty, target)
@@ -106,3 +112,23 @@ def test_convert_expression_dimensionality_mismatch(src_unit: str, target_unit: 
     assert isinstance(result, Err)
     error = result.err()
     assert isinstance(error, DimensionalityError)
+
+
+@pytest.mark.anyio
+async def test_currency_conversion(currency_ureg: UnitRegistry):
+    quantity = currency_ureg("eur")
+    target = str_to_units_container("USD", currency_ureg)
+    result = convert(quantity, target)
+    assert isinstance(result, Ok)
+    converted = result.ok()
+    assert "USD" in str(converted.units)
+
+
+@pytest.mark.anyio
+async def test_currency_symbols(currency_ureg: UnitRegistry):
+    quantity = currency_ureg("eur")
+    target = str_to_units_container("eur", currency_ureg)
+    result = convert(quantity, target)
+    assert isinstance(result, Ok)
+    converted = result.ok()
+    assert "USD" in str(converted.units)
