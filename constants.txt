@@ -9,7 +9,7 @@ k = 1.380649e-23 J K^-1 = boltzmann_constant = k_B                # since May 20
 gravity = 9.80665 m/s^2 = g_0 = g0 = g_n = standard_gravity       # since 1901
 atm = 1.01325e5 Pa = atm = atmosphere                             # since 1954
 
-dirac_constant = ℎ / (2 * π) = ħ = hbar = atomic_unit_of_action = a_u_action
+dirac_constant = ℎ / (2 * pi) = ħ = hbar = atomic_unit_of_action = a_u_action
 avogadro_constant = avogadro_number * mol^-1 = N_A
 molar_gas_constant = k * N_A = R
 faraday_constant = e * N_A

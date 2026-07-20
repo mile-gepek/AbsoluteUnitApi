@@ -123,17 +123,17 @@ count = []
 @import constants.txt
 
 # Angle
-turn = 2 * π * radian
-degree = π / 180 * radian = deg
+turn = 2 * pi * radian
+degree = pi / 180 * radian = deg
 arcminute = degree / 60 = arcmin
 arcsecond = arcminute / 60 = arcsec
-grade = π / 200 * radian = grad = gradian
+grade = pi / 200 * radian = grad = gradian
 
 # Solid angle
 steradian = radian ** 2 = sr
 
 # Information
-bits_per_second = bit / second = Bd = bps = baud 
+bits_per_second = bit / second = Bd = bps = baud
 
 byte = 8 * bit = B = octet
 
@@ -148,7 +148,6 @@ micron = micrometer
 fermi = femtometer
 lightyear = speed_of_light * julian_year = ly = light_year
 au = 149597870700 * meter = astronomical_unit  # since Aug 2012
-parsec = 1 / tansec * astronomical_unit
 nmi = 1852 * meter = nautical_mile
 
 # Mass
@@ -202,8 +201,8 @@ knot = nautical_mile / hour = _ = kt = knot_international = international_knot
 mile_per_hour = mile / hour = mph
 kilometer_per_hour = kilometer / hour = kph
 kilometer_per_second = kilometer / second = kps
-meter_per_second = meter / second = mps 
-foot_per_second = foot / second = fps 
+meter_per_second = meter / second = mps
+foot_per_second = foot / second = fps
 
 # Volumetric Flow Rate
 [volumetric_flow_rate] = [volume] / [time]
@@ -236,7 +235,7 @@ horsepower = 550 * foot * force_pound / second = hp
 [pressure] = [force] / [area]
 pascal = newton / meter ** 2 = Pa
 bar = 1e5 * pascal
-pound_force_per_square_inch = force_pound / inch ** 2 = psi 
+pound_force_per_square_inch = force_pound / inch ** 2 = psi
 
 # Torque
 [torque] = [force] * [length]
@@ -276,7 +275,7 @@ roentgen = 2.58e-4 * coulomb / kilogram = _ = röntgen  # approximate, depends o
 [luminance] = [luminosity] / [area]
 nit = candela / meter ** 2
 stilb = candela / centimeter ** 2
-lambert = 1 / π * candela / centimeter ** 2
+lambert = 1 / pi * candela / centimeter ** 2
 
 # Luminous flux
 [luminous_flux] = [luminosity]
