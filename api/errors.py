@@ -3,6 +3,7 @@ import abc
 
 class BaseError(Exception, abc.ABC):
     def __init__(self, message: str, code: str) -> None:
+        super().__init__(message, code)
         self.message = message
         self.code = code
 
