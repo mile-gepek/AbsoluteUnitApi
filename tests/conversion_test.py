@@ -12,17 +12,15 @@ from api.conversion import (
     metric_to_imperial,
 )
 
-ureg = UnitRegistry(filename="units.txt", autoconvert_offset_to_baseunit=False)
 
-
-def str_to_units_container(units: str) -> UnitsContainer:
+def str_to_units_container(units: str, ureg: UnitRegistry) -> UnitsContainer:
     quantity = ureg.Quantity(units)
     unit_container = UnitsContainer(quantity.unit_items())
     return unit_container
 
 
 @pytest.mark.parametrize("metric, imperial", list(metric_to_imperial.items()))
-def test_infer_target_unit_metric_to_imperial(metric: str, imperial: str):
+def test_infer_target_unit_metric_to_imperial(metric: str, imperial: str, ureg: UnitRegistry):
     qty = ureg(metric)
     result = infer_target_unit(qty, ureg)
 
@@ -32,7 +30,7 @@ def test_infer_target_unit_metric_to_imperial(metric: str, imperial: str):
 
 
 @pytest.mark.parametrize("imperial, metric", list(imperial_to_metric.items()))
-def test_infer_target_unit_imperial_to_metric(imperial: str, metric: str):
+def test_infer_target_unit_imperial_to_metric(imperial: str, metric: str, ureg: UnitRegistry):
     qty = ureg(imperial)
     result = infer_target_unit(qty, ureg)
 
@@ -41,7 +39,7 @@ def test_infer_target_unit_imperial_to_metric(imperial: str, metric: str):
     assert metric in units
 
 
-def test_infer_target_unit_mixed_metric_and_imperial_length():
+def test_infer_target_unit_mixed_metric_and_imperial_length(ureg: UnitRegistry):
     qty = ureg("5 mile") / ureg("2 meter")
     result = infer_target_unit(qty, ureg)
 
@@ -49,7 +47,7 @@ def test_infer_target_unit_mixed_metric_and_imperial_length():
     assert isinstance(result.err(), UnitInferError)
 
 
-def test_infer_target_unit_mixed_metric_and_imperial_weight():
+def test_infer_target_unit_mixed_metric_and_imperial_weight(ureg: UnitRegistry):
     qty = ureg("kg") * ureg("lbs")
     result = infer_target_unit(qty, ureg)
 
@@ -57,7 +55,7 @@ def test_infer_target_unit_mixed_metric_and_imperial_weight():
     assert isinstance(result.err(), UnitInferError)
 
 
-def test_infer_target_unit_mixed_metric_and_imperial_speed():
+def test_infer_target_unit_mixed_metric_and_imperial_speed(ureg: UnitRegistry):
     qty = ureg("mph") * ureg("meter")
     result = infer_target_unit(qty, ureg)
 
@@ -82,9 +80,9 @@ def test_infer_target_unit_mixed_metric_and_imperial_speed():
         ("mile / hour", "kilometer / hour"),
     ],
 )
-def test_convert(src_unit: str, expected_unit: str):
+def test_convert(src_unit: str, expected_unit: str, ureg: UnitRegistry):
     qty = ureg(src_unit)
-    target = str_to_units_container(expected_unit)
+    target = str_to_units_container(expected_unit, ureg)
     result = convert(qty, target)
 
     assert isinstance(result, Ok)
@@ -100,9 +98,9 @@ def test_convert(src_unit: str, expected_unit: str):
         ("second", "pound"),  # time -> mass
     ],
 )
-def test_convert_expression_dimensionality_mismatch(src_unit: str, target_unit: str):
+def test_convert_expression_dimensionality_mismatch(src_unit: str, target_unit: str, ureg: UnitRegistry):
     qty = ureg(src_unit)
-    target = str_to_units_container(target_unit)
+    target = str_to_units_container(target_unit, ureg)
     result = convert(qty, target)
 
     assert isinstance(result, Err)

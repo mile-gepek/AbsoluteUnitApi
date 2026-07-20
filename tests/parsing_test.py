@@ -32,8 +32,6 @@ from api.parsing import (
     tokenize,
 )
 
-ureg = UnitRegistry(filename="units.txt", autoconvert_offset_to_baseunit=False)
-
 
 def float_token(value: float) -> FloatToken:
     return FloatToken(str(value), 0, 0)
@@ -225,7 +223,7 @@ def test_token_span() -> None:
     assert token is not None and token.span() == (12, 13)
 
 
-def test_unary_parse() -> None:
+def test_unary_parse(ureg: UnitRegistry) -> None:
     tokens: deque[Token] = deque(
         [
             op_minus,
@@ -251,7 +249,7 @@ def test_unary_parse() -> None:
     assert not tokens
 
 
-def test_unary_invalid_unary_error() -> None:
+def test_unary_invalid_unary_error(ureg: UnitRegistry) -> None:
     tokens: deque[Token] = deque(
         [
             op_mul,
@@ -274,7 +272,7 @@ def test_binary_dimensionality_error() -> None:
     assert isinstance(result.err(), DimensionalityError)
 
 
-def test_binary_parse() -> None:
+def test_binary_parse(ureg: UnitRegistry) -> None:
     tokens: deque[Token] = deque(
         [
             float_token(4.5),
@@ -294,7 +292,7 @@ def test_binary_parse() -> None:
     assert not tokens
 
 
-def test_parse_binary_division_by_zero() -> None:
+def test_parse_binary_division_by_zero(ureg: UnitRegistry) -> None:
     tokens: deque[Token] = deque(
         [
             unit_token("km"),
@@ -308,7 +306,7 @@ def test_parse_binary_division_by_zero() -> None:
     assert isinstance(result.err()[0], DivisionByZeroError)
 
 
-def test_parse_binary_multiple_errors() -> None:
+def test_parse_binary_multiple_errors(ureg: UnitRegistry) -> None:
     """The expression "(1 / 0) + (2 / ) should report 2 errors"""
     tokens: deque[Token] = deque(
         [
@@ -333,7 +331,7 @@ def test_parse_binary_multiple_errors() -> None:
     assert isinstance(errors[1], ExpectedPrimaryError)
 
 
-def test_primary_unknown_primary_error() -> None:
+def test_primary_unknown_primary_error(ureg: UnitRegistry) -> None:
     tokens: deque[Token] = deque([op_mul])
     parser = Parser(ureg)
     result = parser._parse_primary(tokens)
@@ -342,7 +340,7 @@ def test_primary_unknown_primary_error() -> None:
     assert isinstance(errors[0], UnexpectedTokenError)
 
 
-def test_parse_group() -> None:
+def test_parse_group(ureg: UnitRegistry) -> None:
     tokens: deque[Token] = deque(
         [
             left_paren,
@@ -360,7 +358,7 @@ def test_parse_group() -> None:
     assert not tokens
 
 
-def test_parse_group_unmatched_closing_paren_error() -> None:
+def test_parse_group_unmatched_closing_paren_error(ureg: UnitRegistry) -> None:
     tokens: deque[Token] = deque(tokenize(")(())"))
     parser = Parser(ureg)
     result = parser._parse_primary(tokens)
@@ -369,7 +367,7 @@ def test_parse_group_unmatched_closing_paren_error() -> None:
     assert isinstance(errors[0], UnmatchedParenError)
 
 
-def test_parse_group_unmatched_opening_paren_error() -> None:
+def test_parse_group_unmatched_opening_paren_error(ureg: UnitRegistry) -> None:
     tokens: deque[Token] = deque(
         [
             left_paren,
@@ -384,7 +382,7 @@ def test_parse_group_unmatched_opening_paren_error() -> None:
     assert not tokens
 
 
-def test_parse_float_standalone() -> None:
+def test_parse_float_standalone(ureg: UnitRegistry) -> None:
     tokens: deque[Token] = deque([float_token(3)])
     parser = Parser(ureg)
     parsed = parser._parse_primary_expression(Float, tokens)
@@ -393,7 +391,7 @@ def test_parse_float_standalone() -> None:
     assert parsed.ok() == mock_result
 
 
-def test_parse_unit_standalone() -> None:
+def test_parse_unit_standalone(ureg: UnitRegistry) -> None:
     tokens: deque[Token] = deque([unit_token("km")])
     parser = Parser(ureg)
     parsed = parser._parse_primary_expression(Unit, tokens)
@@ -402,7 +400,7 @@ def test_parse_unit_standalone() -> None:
     assert parsed.ok() == mock_result
 
 
-def test_parse_unit_standalone_leftover() -> None:
+def test_parse_unit_standalone_leftover(ureg: UnitRegistry) -> None:
     """_parse_unit should not do implicit operations, so the 2nd token should be leftover"""
     tokens: deque[Token] = deque(
         [
@@ -418,13 +416,13 @@ def test_parse_unit_standalone_leftover() -> None:
     assert tokens
 
 
-def test_parse_unit_invalid_unit_simple() -> None:
+def test_parse_unit_invalid_unit_simple(ureg: UnitRegistry) -> None:
     result = Unit.try_new(unit_token("dfdasf"), ureg)
     assert isinstance(result, Err)
     assert isinstance(result.err(), UndefinedUnitError)
 
 
-def test_parse_unit_invalid_unit_complex() -> None:
+def test_parse_unit_invalid_unit_complex(ureg: UnitRegistry) -> None:
     tokens: deque[Token] = deque(
         [
             unit_token("abc"),
@@ -440,7 +438,7 @@ def test_parse_unit_invalid_unit_complex() -> None:
     assert isinstance(errors[1], UndefinedUnitError)
 
 
-def test_parse_float_power_float() -> None:
+def test_parse_float_power_float(ureg: UnitRegistry) -> None:
     tokens: deque[Token] = deque(
         [
             float_token(4),
@@ -460,7 +458,7 @@ def test_parse_float_power_float() -> None:
     assert not tokens
 
 
-def test_parse_unit_power_float() -> None:
+def test_parse_unit_power_float(ureg: UnitRegistry) -> None:
     tokens: deque = deque(
         [
             unit_token("km"),
@@ -480,7 +478,7 @@ def test_parse_unit_power_float() -> None:
     assert not tokens
 
 
-def test_parse_unit_power_error() -> None:
+def test_parse_unit_power_error(ureg: UnitRegistry) -> None:
     tokens: deque[Token] = deque(
         [
             unit_token("km"),
@@ -496,7 +494,7 @@ def test_parse_unit_power_error() -> None:
     assert not tokens
 
 
-def test_parse_unit_power_groupexpr() -> None:
+def test_parse_unit_power_groupexpr(ureg: UnitRegistry) -> None:
     tokens: deque[Token] = deque(
         [
             unit_token("km"),
@@ -528,7 +526,7 @@ def test_parse_unit_power_groupexpr() -> None:
     assert not tokens
 
 
-def test_primary_chain_simple() -> None:
+def test_primary_chain_simple(ureg: UnitRegistry) -> None:
     # 30km / 2h
     tokens: deque[Token] = deque(
         [
@@ -559,7 +557,7 @@ def test_primary_chain_simple() -> None:
     assert not tokens
 
 
-def test_primary_chain_complex() -> None:
+def test_primary_chain_complex(ureg: UnitRegistry) -> None:
     # 1km (5+3)m / 2h 13min
     tokens: deque[Token] = deque(
         [
@@ -621,7 +619,7 @@ def test_primary_chain_complex() -> None:
     assert not tokens
 
 
-def test_primary_chain_order() -> None:
+def test_primary_chain_order(ureg: UnitRegistry) -> None:
     tokens: deque[Token] = deque(
         [
             float_token(1),
@@ -657,7 +655,7 @@ def test_primary_chain_order() -> None:
     assert result.ok() == mock_result
 
 
-def test_primary_chain_format_error() -> None:
+def test_primary_chain_format_error(ureg: UnitRegistry) -> None:
     """The chain "6 3 ft m" is invalid because we're expecting a unit after the first '6', and a float after 'ft'."""
     tokens: deque[Token] = deque(
         [
@@ -682,7 +680,7 @@ def test_primary_chain_format_error() -> None:
     assert not tokens
 
 
-def test_parse_strict_mode_implicit_multiplication() -> None:
+def test_parse_strict_mode_implicit_multiplication(ureg: UnitRegistry) -> None:
     parser = Parser(ureg, mode=ParserMode.Strict)
     tokens: deque[Token] = deque(
         [
@@ -701,7 +699,7 @@ def test_parse_strict_mode_implicit_multiplication() -> None:
     assert result.ok() == mock_result
 
 
-def test_parse_strict_mode_complex() -> None:
+def test_parse_strict_mode_complex(ureg: UnitRegistry) -> None:
     parser = Parser(ureg, mode=ParserMode.Strict)
     tokens: deque[Token] = deque(
         [
