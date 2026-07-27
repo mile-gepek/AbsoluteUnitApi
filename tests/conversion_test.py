@@ -132,3 +132,10 @@ def test_currency_symbols(currency_ureg: UnitRegistry):
     assert "USD" in str(converted.units)
 
 
+def test_turn_to_deg(ureg: UnitRegistry):
+    quantity = ureg("turn")
+    degrees = str_to_units_container("deg", ureg)
+    result = convert(quantity, degrees)
+    assert isinstance(result, Ok)
+    converted = result.ok()
+    assert "deg" in str(converted.units)
