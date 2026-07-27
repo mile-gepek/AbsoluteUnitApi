@@ -1,10 +1,10 @@
-from pint import UnitRegistry
 from result import Err
 from rich.pretty import pprint
 
 from api import conversion
+from api.conversion import get_unit_registry
 
-ureg = UnitRegistry()
+ureg = get_unit_registry()
 
 
 if __name__ == "__main__":
