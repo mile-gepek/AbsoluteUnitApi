@@ -316,6 +316,21 @@ class ParenType(enum.Enum):
             case ParenType.L_BRACE | ParenType.R_BRACE:
                 return (ParenType.L_BRACE, ParenType.R_BRACE)
 
+    def to_latex(self) -> str:
+        match self:
+            case ParenType.L_PAREN:
+                return "\\left("
+            case ParenType.R_PAREN:
+                return "\\right)"
+            case ParenType.L_BRACKET:
+                return "\\left["
+            case ParenType.R_BRACKET:
+                return "\\right]"
+            case ParenType.L_BRACE:
+                return "\\left{"
+            case ParenType.R_BRACE:
+                return "\\right}"
+
 
 class ParenToken(Token):
     def __init__(self, token: str, start: int, end: int) -> None:
@@ -513,6 +528,9 @@ class Expression(abc.ABC, BaseModel):
         Evaluate this expression with the global UnitRegistry and context settings.
         """
 
+    @abc.abstractmethod
+    def to_latex(self) -> str: ...
+
     @override
     def __eq__(self, other: object) -> bool:
         raise NotImplementedError
@@ -602,6 +620,24 @@ class Binary(Expression):
         #     return Err([EvaluationError("Overflow error.", self.span())])
         except pint.errors.PintError as e:
             return Err([EvaluationError(str(e), "EVALUATION ERROR", span=self.span)])
+
+    @override
+    def to_latex(self) -> str:
+        left_as_latex = self.left.to_latex()
+        right_as_latex = self.right.to_latex()
+        match self.operator:
+            case OperatorType.ADD:
+                return f"{left_as_latex} + {right_as_latex}"
+            case OperatorType.SUB:
+                return f"{left_as_latex} - {right_as_latex}"
+            case OperatorType.MUL:
+                if self.implicit:
+                    return f"{left_as_latex}{right_as_latex}"
+                return f"{left_as_latex} \\cdot {right_as_latex}"
+            case OperatorType.DIV:
+                return f"\\frac{{{left_as_latex}}}{{{right_as_latex}}}"
+            case OperatorType.EXP:
+                return f"{left_as_latex}^{{{right_as_latex}}}"
 
     def _as_str(self) -> str:
         """Neatly surrounds the expression with parentheses if it is implicit."""
@@ -695,6 +731,10 @@ class Unary(Expression):
         return Ok(op(value.ok()))
 
     @override
+    def to_latex(self) -> str:
+        return f"{self.operator}{self.value.to_latex()}"
+
+    @override
     def __str__(self) -> str:
         return f"{self.operator.value}{self.value}"
 
@@ -780,6 +820,10 @@ class Float(Primary):
         return Ok(self.value)
 
     @override
+    def to_latex(self) -> str:
+        return str(self)
+
+    @override
     def __str__(self) -> str:
         if self.value.is_integer():
             return str(int(self.value))
@@ -856,6 +900,10 @@ class Unit(Primary):
         return Ok(self._unit)
 
     @override
+    def to_latex(self) -> str:
+        return self.unit_str
+
+    @override
     def __str__(self) -> str:
         return self.unit_str
 
@@ -919,6 +967,13 @@ class Group(Expression):
         self, ureg: pint.UnitRegistry
     ) -> Result[PlainQuantity[float] | float, list[EvaluationError]]:
         return self.expression.evaluate(ureg)
+
+    @override
+    def to_latex(self) -> str:
+        left_symbol, right_symbol = self.paren_type.to_pair()
+        left_symbol_latex = left_symbol.to_latex()
+        right_symbol_latex = right_symbol.to_latex()
+        return f"{left_symbol_latex}{self.expression.to_latex()}{right_symbol_latex}"
 
     @override
     def __str__(self) -> str:

@@ -1,4 +1,5 @@
 import asyncio
+import enum
 import logging
 from datetime import datetime, timezone
 from typing import Annotated
@@ -85,7 +86,8 @@ class QuantityWrapper(BaseModel, arbitrary_types_allowed=True):
 
 class ConversionResponse(BaseModel):
     result: QuantityWrapper
-    input_interpretation: str
+    expression_plain: str
+    expression_latex: str
     last_currency_update: datetime | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -178,7 +180,8 @@ async def convert(
 
     return ConversionResponse(
         result=result,
-        input_interpretation=str(expression),
+        expression_plain=str(expression),
+        expression_latex=expression.to_latex(),
         last_currency_update=last_currency_update,
         input_unit_same_as_target=same_unit,
     )

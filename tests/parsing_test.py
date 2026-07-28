@@ -743,3 +743,65 @@ def test_parse_strict_mode_complex(ureg: UnitRegistry) -> None:
         unit_mock("h"),
     ).unwrap()
     assert result.ok() == mock_result
+
+
+def test_float_to_latex() -> None:
+    float_expression = float_mock(5)
+    as_latex = float_expression.to_latex()
+    assert as_latex == "5"
+
+
+def test_unit_to_latex() -> None:
+    unit_expression = unit_mock("cm")
+    as_latex = unit_expression.to_latex()
+    assert as_latex == "cm"
+
+
+def test_group_paren_to_latex() -> None:
+    group_expression = group_mock(ParenType.L_PAREN, float_mock(5))
+    as_latex = group_expression.to_latex()
+    assert as_latex == r"\left(5\right)"
+
+
+def test_group_bracket_to_latex() -> None:
+    group_expression = group_mock(ParenType.L_BRACKET, float_mock(5))
+    as_latex = group_expression.to_latex()
+    assert as_latex == r"\left[5\right]"
+
+
+def test_group_brace_to_latex() -> None:
+    group_expression = group_mock(ParenType.L_BRACE, float_mock(5))
+    as_latex = group_expression.to_latex()
+    assert as_latex == r"\left{5\right}"
+
+
+def test_binary_multiplication_to_latex() -> None:
+    expression = Binary.try_new(
+        float_mock(5),
+        OperatorType.MUL,
+        unit_mock("cm"),
+    ).unwrap()
+    as_latex = expression.to_latex()
+    assert as_latex == r"5 \cdot cm"
+
+
+def test_binary_implicit_multiplication_to_latex() -> None:
+    expression = Binary.try_new(
+        float_mock(5),
+        OperatorType.MUL,
+        unit_mock("cm"),
+        implicit=True,
+    ).unwrap()
+    as_latex = expression.to_latex()
+    assert as_latex == "5cm"
+
+
+def test_binary_division_to_latex() -> None:
+    expression = Binary.try_new(
+        float_mock(5),
+        OperatorType.DIV,
+        unit_mock("cm"),
+        implicit=True,
+    ).unwrap()
+    as_latex = expression.to_latex()
+    assert as_latex == r"\frac{5}{cm}"
