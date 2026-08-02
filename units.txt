@@ -378,6 +378,8 @@ octave = 1 ; logbase: 2; logfactor: 1 = oct
     ounce = pound / 16 = oz = avoirdupois_ounce = avdp_ounce
     pound = 7e3 * grain = lb = avoirdupois_pound = avdp_pound
     ton = 2e3 * pound = _ = short_ton
+
+    force_pound = g_0 * pound = lbf = pound_force
 @end
 
 #### SYSTEMS OF UNITS ####
