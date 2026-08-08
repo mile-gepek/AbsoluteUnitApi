@@ -1,11 +1,9 @@
-from collections.abc import Sequence, AsyncGenerator
-import asyncio
-import enum
 import logging
-from datetime import datetime, timezone
+from collections.abc import AsyncGenerator, Sequence
+from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import FastAPI, Query, Request, Response, status
+from fastapi import FastAPI, Query, Request, Response
 from fastapi.concurrency import asynccontextmanager
 from fastapi.responses import JSONResponse
 from pint.facets.plain import PlainQuantity, PlainUnit
@@ -59,7 +57,7 @@ async def handle_convert_exception_group(
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class HealthResponse(BaseModel):
