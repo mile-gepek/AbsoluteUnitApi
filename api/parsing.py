@@ -23,14 +23,14 @@ from result import Err, Ok, Result
 from api.errors import BaseError
 
 __all__ = [
-    "tokenize",
-    "Parser",
-    "ParserMode",
-    "Error",
-    "ParsingError",
-    "EvaluationError",
     "EOL",
     "_EOL",
+    "Error",
+    "EvaluationError",
+    "Parser",
+    "ParserMode",
+    "ParsingError",
+    "tokenize",
 ]
 
 
@@ -477,7 +477,7 @@ class UnknownToken(Token):
         raise NotImplementedError
 
 
-def tokenize(s: str) -> Generator[Token, None, None]:
+def tokenize(s: str) -> Generator[Token]:
     """
     A lazy iterator to generate tokens from a a given input string.
     """
