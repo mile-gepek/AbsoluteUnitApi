@@ -1,3 +1,4 @@
+from collections.abc import Sequence, AsyncGenerator
 import asyncio
 import enum
 import logging
@@ -10,7 +11,6 @@ from fastapi.responses import JSONResponse
 from pint.facets.plain import PlainQuantity, PlainUnit
 from pint.util import UnitsContainer
 from pydantic import BaseModel, BeforeValidator, Field, PlainSerializer
-from pytest_asyncio.plugin import AsyncGenerator
 from result import Err
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -31,7 +31,7 @@ currency_handler = CurrencyHandler()
 
 
 class ConversionExceptionGroup(ExceptionGroup):
-    def __init__(self, message: str, errors: list[BaseError]) -> None:
+    def __init__(self, message: str, errors: Sequence[BaseError]) -> None:
         super().__init__(message, errors)
         self.errors = errors
 
@@ -106,16 +106,11 @@ async def convert(
 ) -> ConversionResponse:
     errors = []
 
-    async with asyncio.timeout(2):
-        try:
-            expression_result = conversion.parse_input(
-                user_input,
-                ureg,
-                mode,
-            )
-        except TimeoutError:
-            response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-            raise
+    expression_result = conversion.parse_input(
+        user_input,
+        ureg,
+        mode,
+    )
 
     if isinstance(expression_result, Err):
         errors.extend(expression_result.err())
