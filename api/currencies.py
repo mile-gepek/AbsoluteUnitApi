@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections.abc import Sequence
 from datetime import datetime, time, timedelta
 from typing import Annotated, Any
 
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 midnight = time(0, 0, 0)
 
 
-def clear_ureg_cached_currencies(ureg: UnitRegistry) -> None:
+def clear_ureg_cached_currencies(ureg: UnitRegistry, units: Sequence[str]) -> None:
     """
     The current version of pint has a bug where redefining units does not clear their cached ratios.
 
@@ -30,11 +31,14 @@ def clear_ureg_cached_currencies(ureg: UnitRegistry) -> None:
         return
     cache = ureg._cache
     invalid_root_unit_keys: set[UnitsContainer] = set()
-    for dimension, units in cache.dimensional_equivalents.items():
-        if isinstance(dimension, UnitsContainer) and "currency" in dimension:
-            invalid_root_unit_keys |= set(units)
+
+    for unit in units:
+        for key in cache.root_units:  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+            if isinstance(key, UnitsContainer) and unit in key:
+                invalid_root_unit_keys.add(key)
+
     for unit_container in invalid_root_unit_keys:
-        del cache.root_units[unit_container]
+        del cache.root_units[unit_container]  # pyright: ignore[reportUnknownMemberType]
 
     invalid_conversion_keys: set[tuple[UnitsContainer, UnitsContainer]] = set()
     for dimension in cache.conversion_factor:
@@ -140,14 +144,13 @@ class CurrencyHandler:
                         "/latest",
                         params={"base_currency": base_currency},
                     )
-                    if response.status_code != 200:
-                        clear_ureg_cached_currencies(ureg)
 
                     validated_response = CurrencyApiResponse(
                         **response.json(), base_currency=base_currency
                     )
                     clear_currencies(ureg, base_currency)
-                    clear_ureg_cached_currencies(ureg)
+                    currency_symbols = tuple(validated_response.exchange_rates_to_base.keys())
+                    clear_ureg_cached_currencies(ureg, currency_symbols)
                     set_ureg_exchange_rates(
                         ureg, base_currency, validated_response.exchange_rates_to_base
                     )

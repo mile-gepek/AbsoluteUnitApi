@@ -1,9 +1,7 @@
-import sys
 from collections.abc import Generator
 
 import pytest
 from pint import UnitRegistry
-from rich.pretty import pprint
 
 from api.conversion import get_unit_registry
 from api.currencies import (
@@ -32,4 +30,5 @@ def currency_ureg_fixture(ureg: UnitRegistry) -> Generator[UnitRegistry]:
         )
     yield ureg
     clear_currencies(ureg, mock_currency_data.base_currency)
-    clear_ureg_cached_currencies(ureg)
+    currency_symbols = tuple(mock_currency_data.exchange_rates_to_base.keys())
+    clear_ureg_cached_currencies(ureg, currency_symbols)
