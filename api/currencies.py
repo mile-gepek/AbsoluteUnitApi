@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from collections.abc import Sequence
-from datetime import datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from typing import Annotated, Any
 
 from httpx2 import AsyncClient
@@ -117,8 +117,8 @@ def set_ureg_exchange_rates(
             )
 
 
-def seconds_until_midnight() -> float:
-    now = datetime.now()
+def seconds_until_utc_midnight() -> float:
+    now = datetime.now(UTC)
     target = datetime.combine(now.date(), midnight)
     if target <= now:
         target += timedelta(days=1)
@@ -156,7 +156,7 @@ class CurrencyHandler:
                     )
                     self.last_currency_update = validated_response.last_updated_at
 
-                    await asyncio.sleep(seconds_until_midnight())
+                    await asyncio.sleep(seconds_until_utc_midnight())
 
         task = asyncio.create_task(current_task_impl())
         return task
