@@ -79,7 +79,7 @@ class UnitInferError(UnitError):
 
 def infer_target_unit(
     quantity: PlainQuantity[float],
-    ureg: UnitRegistry,
+    ureg: UnitRegistry[float],
 ) -> Result[UnitsContainer, UnitInferError]:
     """
     Attempt to automatically recognize which units the given quantity to should be converted to.
@@ -125,7 +125,7 @@ def infer_target_unit(
 
 def get_target_unit(
     target: str,
-    ureg: UnitRegistry,
+    ureg: UnitRegistry[float],
 ) -> Result[UnitsContainer, InvalidUnitError]:
     try:
         unit_quantity = ureg.Quantity(target)
@@ -137,7 +137,7 @@ def get_target_unit(
 
 
 def has_different_currencies(
-    ureg: UnitRegistry,
+    ureg: UnitRegistry[float],
     quantity: PlainQuantity[float],
     target: UnitsContainer,
 ) -> bool:
@@ -150,7 +150,7 @@ def has_different_currencies(
 
 def parse_input(
     input: str,
-    ureg: UnitRegistry,
+    ureg: UnitRegistry[float],
     mode: parsing.ParserMode = parsing.ParserMode.Adaptive,
 ) -> Result[parsing.Expression, list[ParsingError]]:
     parser = parsing.Parser(ureg, mode)
@@ -186,7 +186,7 @@ def convert(
 unit_registry = UnitRegistry(filename="units.txt", autoconvert_offset_to_baseunit=False)
 
 
-def get_unit_registry() -> UnitRegistry:
+def get_unit_registry() -> UnitRegistry[float]:
     return unit_registry
 
 

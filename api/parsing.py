@@ -522,7 +522,7 @@ class Expression(abc.ABC, BaseModel):
     @abc.abstractmethod
     def evaluate(
         self,
-        ureg: pint.UnitRegistry,
+        ureg: pint.UnitRegistry[float],
     ) -> Result[PlainQuantity[float] | float, list[EvaluationError]]:
         """
         Evaluate this expression with the global UnitRegistry and context settings.
@@ -595,7 +595,7 @@ class Binary(Expression):
 
     @override
     def evaluate(
-        self, ureg: pint.UnitRegistry
+        self, ureg: pint.UnitRegistry[float]
     ) -> Result[PlainQuantity[float] | float, list[EvaluationError]]:
         op = _BINARY_OP_MAP[self.operator]
         errors: list[EvaluationError] = []
@@ -722,7 +722,7 @@ class Unary(Expression):
 
     @override
     def evaluate(
-        self, ureg: pint.UnitRegistry
+        self, ureg: pint.UnitRegistry[float]
     ) -> Result[PlainQuantity[float] | float, list[EvaluationError]]:
         value = self.value.evaluate(ureg)
         if isinstance(value, Err):
@@ -766,7 +766,7 @@ class Primary(Expression, abc.ABC):
     @classmethod
     @abc.abstractmethod
     def from_token(
-        cls, token: Token, ureg: pint.UnitRegistry
+        cls, token: Token, ureg: pint.UnitRegistry[float]
     ) -> Result[Self, ParsingError]: ...
 
     @override
@@ -795,7 +795,7 @@ class Float(Primary):
     def from_token(
         cls,
         token: Token,
-        ureg: pint.UnitRegistry,
+        ureg: pint.UnitRegistry[float],
     ) -> Result[Self, ParsingError]:
         start = token.start
         end = token.end
@@ -816,7 +816,7 @@ class Float(Primary):
         return False
 
     @override
-    def evaluate(self, ureg: pint.UnitRegistry) -> Result[float, list[EvaluationError]]:
+    def evaluate(self, ureg: pint.UnitRegistry[float]) -> Result[float, list[EvaluationError]]:
         return Ok(self.value)
 
     @override
@@ -859,7 +859,7 @@ class Unit(Primary):
 
     @classmethod
     def try_new(
-        cls, unit_token: UnitToken, ureg: pint.UnitRegistry
+        cls, unit_token: UnitToken, ureg: pint.UnitRegistry[float]
     ) -> Result[Self, UndefinedUnitError]:
         try:
             unit = ureg.Quantity(unit_token.token)
@@ -877,7 +877,7 @@ class Unit(Primary):
     @override
     @classmethod
     def from_token(
-        cls, token: Token, ureg: pint.UnitRegistry
+        cls, token: Token, ureg: pint.UnitRegistry[float]
     ) -> Result[Self, ParsingError]:
         match token:
             case UnitToken():
@@ -895,7 +895,7 @@ class Unit(Primary):
 
     @override
     def evaluate(
-        self, ureg: pint.UnitRegistry
+        self, ureg: pint.UnitRegistry[float]
     ) -> Result[PlainQuantity[float], list[EvaluationError]]:
         return Ok(self._unit)
 
@@ -964,7 +964,7 @@ class Group(Expression):
 
     @override
     def evaluate(
-        self, ureg: pint.UnitRegistry
+        self, ureg: pint.UnitRegistry[float]
     ) -> Result[PlainQuantity[float] | float, list[EvaluationError]]:
         return self.expression.evaluate(ureg)
 
@@ -1123,9 +1123,9 @@ class ParserMode(enum.StrEnum):
 
 class Parser:
     def __init__(
-        self, ureg: pint.UnitRegistry, mode: ParserMode = ParserMode.Adaptive
+        self, ureg: pint.UnitRegistry[float], mode: ParserMode = ParserMode.Adaptive
     ) -> None:
-        self.ureg: pint.UnitRegistry = ureg
+        self.ureg: pint.UnitRegistry[float] = ureg
         self._mode: ParserMode = mode
         self._token: Token | None = None
         self._previous_token: Token | None = None

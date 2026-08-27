@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 midnight = time(0, 0, 0)
 
 
-def clear_ureg_cached_currencies(ureg: UnitRegistry, units: Sequence[str]) -> None:
+def clear_ureg_cached_currencies(ureg: UnitRegistry[float], units: Sequence[str]) -> None:
     """
     The current version of pint has a bug where redefining units does not clear their cached ratios.
 
@@ -49,7 +49,7 @@ def clear_ureg_cached_currencies(ureg: UnitRegistry, units: Sequence[str]) -> No
         del cache.conversion_factor[unit_container]
 
 
-def clear_currencies(ureg: UnitRegistry, base_currency: str):
+def clear_currencies(ureg: UnitRegistry[float], base_currency: str):
     """
     If the api removes certain currencies they will be left in the registry.
     This is potentially invalid if a currency's old exchange rate is still stored, but the API doesn't update it.
@@ -103,7 +103,7 @@ async def get_exchange_rates(
 
 
 def set_ureg_exchange_rates(
-    ureg: UnitRegistry,
+    ureg: UnitRegistry[float],
     base_currency: str,
     exchange_rates: dict[str, float],
 ):
@@ -131,7 +131,7 @@ class CurrencyHandler:
     def start_currency_task(
         self,
         currencyapi_token: str,
-        ureg: UnitRegistry,
+        ureg: UnitRegistry[float],
         base_currency: str = "EUR",
     ) -> asyncio.Task[None]:
         async def current_task_impl():
