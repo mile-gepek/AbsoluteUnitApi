@@ -144,17 +144,19 @@ class CurrencyHandler:
                         "/latest",
                         params={"base_currency": base_currency},
                     )
-
-                    validated_response = CurrencyApiResponse(
-                        **response.json(), base_currency=base_currency
-                    )
-                    clear_currencies(ureg, base_currency)
-                    currency_symbols = tuple(validated_response.exchange_rates_to_base.keys())
-                    clear_ureg_cached_currencies(ureg, currency_symbols)
-                    set_ureg_exchange_rates(
-                        ureg, base_currency, validated_response.exchange_rates_to_base
-                    )
-                    self.last_currency_update = validated_response.last_updated_at
+                    if response.status_code != 200:
+                        logger.warning(f"CurrencyAPI responded with status code {response.status_code}")
+                    else:
+                        validated_response = CurrencyApiResponse(
+                            **response.json(), base_currency=base_currency
+                        )
+                        clear_currencies(ureg, base_currency)
+                        currency_symbols = tuple(validated_response.exchange_rates_to_base.keys())
+                        clear_ureg_cached_currencies(ureg, currency_symbols)
+                        set_ureg_exchange_rates(
+                            ureg, base_currency, validated_response.exchange_rates_to_base
+                        )
+                        self.last_currency_update = validated_response.last_updated_at
 
                     await asyncio.sleep(seconds_until_utc_midnight())
 
