@@ -37,6 +37,8 @@ class Config(BaseModel):
 
     logging: LoggingConfig
 
+    proxy_headers: bool = False
+
     @classmethod
     def get_config(cls, path="config.toml") -> Self:
         with open(path, "rb") as config_file:
