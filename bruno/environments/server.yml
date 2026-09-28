@@ -1,0 +1,5 @@
+name: server
+variables:
+  - name: baseURL
+    value: https://mile-gepek.dev/api/v1
+    description: ""
